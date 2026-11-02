@@ -45,18 +45,41 @@ R-2 的理由：长任务被截断很常见。一律标失败，你会开始忽�
 
 ## 安装
 
+### 一键安装（推荐）
+
 ```sh
-dsh plugin --profile desktop add dsh-middleman
+curl -fsSL https://raw.githubusercontent.com/raosiyu/dsh-middleman/main/install.sh | sh
 ```
 
-或者从源码装：
+脚本会下载源码、跑一遍测试，然后告诉你**在应用里粘贴哪个路径**。
+
+> 为什么不能全自动：桌面版（Electron 应用）的 profile 由应用自己管，命令行 `dsh plugin --profile desktop add` 会被直接拒绝（`profile "desktop" is managed exclusively by the Electron application`）。最后一步只能在应用里点。
+
+### 应用内安装（手动版，最直接）
+
+1. 打开 DeepSeek Harness
+2. 侧边栏 → **插件** → **安装**
+3. 粘贴仓库地址或本地路径：
+
+```
+https://github.com/raosiyu/dsh-middleman
+```
+
+4. **完全退出应用，再打开**
+
+### 从源码
 
 ```sh
 git clone https://github.com/raosiyu/dsh-middleman.git
-dsh plugin --profile desktop add ./dsh-middleman
+cd dsh-middleman
+npm test          # 42 个用例，应该全绿
 ```
 
-装完**完全退出 DSH 再打开**，新建会话才会加载插件。
+然后用上面「应用内安装」把本地目录装上。
+
+### 验证装好了
+
+侧边栏多一行「中台」。点开是空的批次列表，说明装对了。
 
 ## 手感演示（不建会话、不花钱）
 
@@ -98,7 +121,10 @@ node bin/mm.mjs
 
 - **`selectModel` 会改全局默认模型。** 派发前读、派完恢复；恢复失败只记日志，不回滚派发。
 - **技能组合受限。** `/grill-with-docs`、`/to-tickets` 这些主流程技能是 `disable-model-invocation`，模型调不动。所以盘问逻辑内建在插件里，没有外包给技能。
-- **面板用原生 DOM。** 不引客户端 UI 包，不跟宿主组件版本绑死；代价是样式比宿主原生页面朴素。
+- **面板用 `React.createElement`。** 不用 JSX，于是仓库里就是能直接装的那一份，不需要构建步骤；代价是写起来比 JSX 啰嗦。
+- **浏览器半区必须按 DSH 的客户端模块协议注册**（`window.__ModuleLoader__.load({id, factory})`）。写成普通 ESM 导出 `apply`，宿主会当宿主插件装载，然后卡在「waiting for service: slots」——slots 是浏览器侧的服务。
+- **`session/modelCatalog` 在 0.2.1-rc.5 上会抛** `Cannot read properties of undefined (reading 'aborted')`。所以模型目录直接从 `ctx.llm` 读，不走那条网关路径。
+- **`inject` 必须列全。** 少一个服务会在运行时报 `cannot get property X without inject`，而不是启动时失败——所以 `inject` 有专门的测试盯着。
 
 ## 测试
 

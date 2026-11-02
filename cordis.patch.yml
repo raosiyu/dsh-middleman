@@ -1,13 +1,11 @@
-# dsh-middleman bundle 层：一行宿主半区，一行浏览器半区。
+# dsh-middleman bundle 层：一行宿主半区。
 #
-# 宿主行拥有台账、/dsh-middleman/api 路由、派发与回传；浏览器行只注册
-# 侧边栏一行与中台页。两行 id 都在本包命名空间内，不与任何共享 id 冲突。
+# 浏览器半区**不是**另一行 loader：它由 package.json 的 dsh.client 声明，
+# 由 web 应用自动加载 ./lib/client.js。写成独立行会让它当宿主插件装载，
+# 然后卡在「waiting for service: slots」——slots 是浏览器侧的服务。
 - insert:
     - id: dsh-middleman
       name: 'dsh-middleman'
       config:
         enabled: true
         announceToAgent: true
-    - id: dsh-middleman-client
-      name: 'dsh-middleman/client'
-      config: {}

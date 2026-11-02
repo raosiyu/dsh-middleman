@@ -33,6 +33,14 @@ function fakeCtx() {
     typertGateway: {
       invoke: async ({ method }) => (method === 'modelCatalog' ? { groups: [] } : { sessionId: 'session-smoke' }),
     },
+    llm: {
+      listProviders: () => [{ id: 'fake', name: 'Fake' }],
+      listModels: async () => [{ id: 'm1', name: 'M1' }],
+    },
+    agentDefaultModel: {
+      currentSelection: () => ({ provider: 'fake', model: 'm1' }),
+      saveSelection: async () => {},
+    },
     on(name, listener) {
       registered.listeners.push({ name, listener })
       return () => {}
@@ -49,8 +57,12 @@ function fakeCtx() {
   return { ctx, registered }
 }
 
-test('inject 声明了三个必需服务', () => {
-  assert.deepEqual(inject, ['tools', 'typertGateway', 'webServer'])
+test('inject 声明了全部必需服务', () => {
+  // 少一个都会在运行时报 "cannot get property X without inject"，
+  // 所以这条测试盯住的是那份清单本身。
+  assert.deepEqual(inject, [
+    'tools', 'typertGateway', 'webServer', 'llm', 'systemPrompt', 'agentDefaultModel',
+  ])
 })
 
 test('apply 注册了七个工具', () => {
