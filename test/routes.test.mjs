@@ -97,6 +97,7 @@ function setup(dispatcher = {}) {
   const faces = {
     dispatcher: {
       async run(sessionId, text) { calls.push({ method: 'run', sessionId, text }) },
+      async steer(sessionId, text) { calls.push({ method: 'steer', sessionId, text }) },
       async cancel(sessionId) { calls.push({ method: 'cancel', sessionId }) },
       async selectModel(sessionId, model) {
         calls.push({ method: 'selectModel', sessionId, model })
@@ -412,4 +413,65 @@ test('钉模型失败时不装作成功', async () => {
 
 test('清理临时目录', () => {
   rmSync(home, { recursive: true, force: true })
+})
+
+test('/feedback 在子会话跑着的时候直接 steer 它', async () => {
+  // 人看到子会话跑偏了，当场就该能拉回来，不用等它跑完再返工。
+  const { byPath, calls } = setup()
+  await seedBatch('D-feedback-running', { status: 'running' })
+
+  const r = await call(byPath.get('/dsh-middleman/api/feedback'), {
+    body: { batchId: 'D-feedback-running', ticketId: 'T-1', message: '方向反了，先看 README' },
+  })
+
+  assert.equal(r.status, 200)
+  assert.equal(r.body.deliveredTo, 'child')
+  const steer = calls.find((c) => c.method === 'steer')
+  assert.ok(steer !== undefined, '没有 steer 子会话')
+  assert.equal(steer.sessionId, 'session-child-1')
+  assert.equal(steer.text, '方向反了，先看 README')
+  // 不该同时推给主会话——那是「票还没跑」时的事。
+  assert.equal(calls.filter((c) => c.method === 'run').length, 0, '不该同时推给主会话')
+})
+
+test('/feedback 在票还挂着的时候推给主会话', async () => {
+  const { byPath, calls } = setup()
+  await seedBatch('D-feedback-suspended', { status: 'suspended' })
+
+  const r = await call(byPath.get('/dsh-middleman/api/feedback'), {
+    body: { batchId: 'D-feedback-suspended', ticketId: 'T-1', message: '换个方向' },
+  })
+
+  assert.equal(r.status, 200)
+  assert.equal(r.body.deliveredTo, 'parent')
+  assert.equal(calls.filter((c) => c.method === 'steer').length, 0, '还没跑的票没有活着的子会话可 steer')
+  const run = calls.find((c) => c.method === 'run')
+  assert.ok(run !== undefined, '没有推给主会话')
+  assert.equal(run.sessionId, 'session-parent-1')
+  assert.match(run.text, /\[工单修改意见\] T-1/)
+})
+
+test('/feedback steer 失败时不装作送到了', async () => {
+  const { byPath } = setup({
+    async steer() { throw new Error('网关拒绝了这个 steer') },
+  })
+  await seedBatch('D-feedback-steer-fail', { status: 'running' })
+
+  const r = await call(byPath.get('/dsh-middleman/api/feedback'), {
+    body: { batchId: 'D-feedback-steer-fail', ticketId: 'T-1', message: 'x' },
+  })
+
+  assert.notEqual(r.status, 200, 'steer 失败却回 200，人以为说到了其实没送到')
+  assert.equal(r.body.ok, false)
+  assert.equal(r.body.code, 'steer-failed')
+})
+
+test('意见为空时拒绝', async () => {
+  const { byPath } = setup()
+  await seedBatch('D-feedback-empty')
+  const r = await call(byPath.get('/dsh-middleman/api/feedback'), {
+    body: { batchId: 'D-feedback-empty', ticketId: 'T-1', message: '   ' },
+  })
+  assert.equal(r.status, 400)
+  assert.equal(r.body.code, 'invalid-request')
 })

@@ -91,10 +91,23 @@ test('还没派发 → 不给执行按钮，等前序工单', () => {
   assert.equal(view.buttons[0].label, '等前序工单完成')
 })
 
-test('每个状态都有「有修改意见」按钮', () => {
-  for (const status of ['pending', 'suspended', 'running', 'done', 'failed']) {
+test('意见按钮的文案说清楚意见要送给谁', () => {
+  // 票在跑：这句话直接给子会话（steer），所以叫「追加指令」。
+  // 票没跑：给主会话，所以叫「有修改意见」。
+  //
+  // 文案要跟实际收件人对上——不然人以为说给了子会话，其实说给了主会话。
+  for (const status of ['pending', 'suspended', 'done', 'failed']) {
     const view = ticketView({ id: 'T-1', title: 'x', status })
     assert.equal(view.buttons.at(-1).label, '有修改意见', status)
+  }
+  const running = ticketView({ id: 'T-1', title: 'x', status: 'running' })
+  assert.equal(running.buttons.at(-1).label, '追加指令')
+})
+
+test('每个状态都有一个能提意见的按钮', () => {
+  for (const status of ['pending', 'suspended', 'running', 'done', 'failed']) {
+    const view = ticketView({ id: 'T-1', title: 'x', status })
+    assert.equal(view.buttons.at(-1).kind, 'feedback', status)
   }
 })
 
