@@ -36,6 +36,8 @@ function fakeFaces() {
           return { sessionId: 'session-should-not-exist', model: { provider: 'p', model: 'm' } }
         },
       },
+      // 仓库里真实的测试文件：R-1 的验证方式承诺的正是这一条。
+      testFiles: async () => ['risk-r1.test.mjs'],
       warn() {},
     },
   }
@@ -120,7 +122,8 @@ test('批次与票都齐了才真的建会话', async () => {
     trigger: '不带 batchId',
     impact: '额度白花',
     mitigation: '代码里拒绝',
-    verification: '单测',
+    // 指名道姓：承诺了哪条测试，就得真有那条。
+    verification: '单测：risk-r1.test.mjs 断言抛错且不建会话',
   }]
   batch.tickets = [{
     id: 'T-1', title: '可以派的票', brief: '干活', blockedBy: [], riskIds: ['R-1'],
