@@ -12,20 +12,44 @@
 
 中台要的是：**派发时把会话建好、模型定好，但不发第一条消息**——等你点执行。
 
-## 为什么是这三个闸门
+## 为什么是这四道闸门
 
 规则写在代码里，不写在提示词里。提示词会被模型合理化掉。
 
-1. **收敛**：设计树前沿清空、规格有验收标准、风险四栏齐全、依赖边合法
-2. **批准**：只有人能点。`approve` 不在工具面上，模型没有对应工具可调
-3. **派发**：批次已批准、每张票挂风险、写了 `modelReason`、阻塞边不成环
+1. **设计**：至少 3 个已回答的问题、一份流程规划、至少一条四栏齐全的风险
+2. **收敛**：设计树前沿清空、规格有验收标准、风险四栏齐全、依赖边合法
+3. **批准**：只有人能点。`approve` 不在工具面上，模型没有对应工具可调
+4. **派发**：批次已批准、每张票挂风险、写了 `modelReason`、阻塞边不成环
+
+## 跟 ask-matt 技能组合怎么接
+
+这套流程抄的是 [mattpocock/skills](https://github.com/mattpocock/skills) 里
+`/grill-with-docs` → `/to-spec` → `/to-tickets` → `/implement` 那条主流程的骨架，
+但**盘问逻辑内建在插件里**，不外包给技能。
+
+原因：`ask-matt`、`grill-with-docs`、`to-spec`、`to-tickets` 这些技能都带
+`disable-model-invocation: true`，模型调不动它们。只有 `grilling` 是模型可调的。
+所以插件自己实现了那套盘问纪律：
+
+| 纪律 | 实现 |
+|---|---|
+| 事实是你的活 | 提示段明确写「能自己查的就去查，别问用户」 |
+| 决定是用户的活 | 每个问题必须带推荐答案和理由 |
+| 前沿才能问 | `design_round` 只放前置条件已满足的决定 |
+| 每轮带风险探测 | 代码保证：没登记过风险就自动追加一问 |
+| 风险要有验证方式 | 四栏缺一栏拒绝，「无」「n/a」不算 |
+
+技能组合仍然可以叠加用：主会话想走 `/grill-with-docs` 就自己调用，插件的
+账本照样记；不想走技能，插件自己也够用。
 
 ## 流程
 
 ```
 design_open      开一个设计批次（盘问阶段的容器）
 design_round     取下一轮要问的问题；代码保证只要还没登记风险就带一个风险探测
+design_question  记一个问过用户的问题和答案（派发前至少 3 个）
 design_answer    定一个决定，或登记一条风险（四栏缺一栏就拒绝）
+design_plan      写下流程规划：分几步、每步产出什么、什么能并行
 design_converge  收敛成规格
    ↓  人在中台面板点「批准」
 design_split     拆成工单，每张挂风险、写 modelReason
@@ -34,12 +58,13 @@ dispatch_task    建会话 + 定模型 + 挂起（不发第一条消息）
 （子会话开跑）→ turn/end → 结果自动推回主会话
 ```
 
-## 两条风险，已绑在代码上
+## 三条风险，已绑在代码上
 
 | ID | 触发 | 缓解 | 验证 |
 |---|---|---|---|
 | R-1 | 主会话把 `dispatch_task` 当普通 subagent 用，跳过盘问 | 没有 `batchId` 一律拒绝 | `dispatch.test.mjs` 断言抛错 |
 | R-2 | 子会话撞 `max-tokens` 或被中断，却被当成失败 | 按 reason 分类，记 `partial` 并标截断位置 | `core.test.mjs` 断言 status |
+| R-3 | 派发前根本没问清楚 | 至少 3 个已回答问题 + 流程规划 + 一条风险，缺一不可 | `core.test.mjs` 断言 designGateProblems |
 
 R-2 的理由：长任务被截断很常见。一律标失败，你会开始忽略失败通知。
 
@@ -51,11 +76,25 @@ R-2 的理由：长任务被截断很常见。一律标失败，你会开始忽�
 curl -fsSL https://raw.githubusercontent.com/raosiyu/dsh-middleman/main/install.sh | sh
 ```
 
-脚本会下载源码、跑一遍测试，然后告诉你**在应用里粘贴哪个路径**。
+脚本做三件事：把包 `pnpm add` 进 profile 的 node_modules、把 bundle 名挂进
+profile 的 `dsh.profile.bundles`、跑一遍测试自检。全自动，不用回应用里点。
 
-> 为什么不能全自动：桌面版（Electron 应用）的 profile 由应用自己管，命令行 `dsh plugin --profile desktop add` 会被直接拒绝（`profile "desktop" is managed exclusively by the Electron application`）。最后一步只能在应用里点。
+装完**完全退出 DSH 再打开**（不是关窗口），侧边栏会多一行「中台」。
 
-### 应用内安装（手动版，最直接）
+> 为什么不直接用 `dsh plugin --profile desktop add`：桌面版的 profile 由
+> Electron 应用独占，CLI 里有硬检查会拒绝：
+> `error: profile "desktop" is managed exclusively by the Electron application`。
+> 脚本绕开这条检查，自己做插件管理器做的同一件事。
+
+常用参数：
+
+```sh
+./install.sh --profile web      # 装到别的 profile
+./install.sh --dry-run          # 只打印会发生什么
+./install.sh --uninstall        # 卸掉
+```
+
+### 应用内安装（手动版）
 
 1. 打开 DeepSeek Harness
 2. 侧边栏 → **插件** → **安装**
@@ -72,7 +111,7 @@ https://github.com/raosiyu/dsh-middleman
 ```sh
 git clone https://github.com/raosiyu/dsh-middleman.git
 cd dsh-middleman
-npm test          # 42 个用例，应该全绿
+npm test          # 49 个用例，应该全绿
 ```
 
 然后用上面「应用内安装」把本地目录装上。
@@ -98,6 +137,8 @@ node bin/mm.mjs
   "id": "D-20261102-3cxz",
   "status": "approved",          // grilling → converged → approved → dispatched
   "decisions": [ /* 设计树的每个决定 */ ],
+  "questions": [ /* 问过用户的问题与答案，派发前至少 3 个 */ ],
+  "plan":      { "steps": "", "output": "", "parallel": "" },
   "risks":     [ /* 四栏齐全的风险 */ ],
   "spec":      { "goal": "", "nonGoals": [], "acceptance": [] },
   "tickets":   [ /* 工单，带 riskIds 与 modelReason */ ]
@@ -132,7 +173,7 @@ node bin/mm.mjs
 node --test test/*.test.mjs
 ```
 
-32 个用例：前沿计算、三道闸门、环检测、风险四栏、`turn/end` 分类、派发顺序、默认模型恢复。
+49 个用例：前沿计算、四道闸门、环检测、风险四栏、设计闸门、`turn/end` 分类、派发顺序、默认模型恢复、路由与工具注册。
 
 ## 许可
 
