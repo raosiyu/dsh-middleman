@@ -12,6 +12,9 @@
 
 中台要的是：**派发时把会话建好、模型定好，但不发第一条消息**——等你点执行。
 
+> **第一次用请看 [USAGE.md](USAGE.md)** —— 装、怎么触发、卡片怎么看、模型怎么选、出错了怎么办，一篇读完。
+> 这份 README 讲的是它为什么这么做。
+
 ## 怎么触发
 
 **一句话：在主会话里用自然语言说事，模型会自己走流程。**
@@ -231,12 +234,14 @@ node bin/mm.mjs
 
 ## 已知取舍
 
-- **`selectModel` 会改全局默认模型。** 派发前读、派完恢复；恢复失败只记日志，不回滚派发。
+- **卡片只在实时渲染时存在。** 刷新会话后，对话流里那张派发卡片是空的——宿主不把 toolview 的渲染结果持久化进会话事件。台账里的工单还在，面板里的「执行」按钮也还在，所以活照跑，只是那张卡片不再复现。
+- **`selectModel` 会改全局默认模型。** 派发前读、派完恢复；恢复失败只记日志，不回滚派发。改模型那条路（`/retarget`）同样如此。
 - **技能组合受限。** `/grill-with-docs`、`/to-tickets` 这些主流程技能是 `disable-model-invocation`，模型调不动。所以盘问逻辑内建在插件里，没有外包给技能。
 - **面板用 `React.createElement`。** 不用 JSX，于是仓库里就是能直接装的那一份，不需要构建步骤；代价是写起来比 JSX 啰嗦。
 - **浏览器半区必须按 DSH 的客户端模块协议注册**（`window.__ModuleLoader__.load({id, factory})`）。写成普通 ESM 导出 `apply`，宿主会当宿主插件装载，然后卡在「waiting for service: slots」——slots 是浏览器侧的服务。
 - **`session/modelCatalog` 在 0.2.1-rc.5 上会抛** `Cannot read properties of undefined (reading 'aborted')`。所以模型目录直接从 `ctx.llm` 读，不走那条网关路径。
 - **`inject` 必须列全。** 少一个服务会在运行时报 `cannot get property X without inject`，而不是启动时失败——所以 `inject` 有专门的测试盯着。
+- **子会话历史走 `session/follow`，不走 `session/page`。** page 的 `throughSeq` 是「读到第几号事件」，猜错就抛 "past cursor"，猜成 -1 则永远是空数组——两种猜法都表现为「子会话一个字没说」。follow 自己报游标，不用猜。
 
 ## 测试
 
