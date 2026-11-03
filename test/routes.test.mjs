@@ -1,0 +1,349 @@
+/**
+ * 七条路由，每一条都要真的被调用过。
+ *
+ * 为什么有这条：/retarget 从上线起就没跑通过——报错是
+ * 「faces.dispatcher.selectModel is not a function」，dispatcher 里
+ * 根本没这个方法。之所以能活这么久，是因为 host.test.mjs 只数了
+ * 「有 7 条路由」，只有 /feedback 与 /run 两条被真正调用过。
+ *
+ * 所以这里把七条全调一遍，不许有「注册了但没跑」的。
+ */
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+const home = mkdtempSync(join(tmpdir(), 'mm-routes-'))
+process.env.MM_HOME = home
+
+const { makeRoutes } = await import('../lib/routes.js')
+const { blankBatch, save, load } = await import('../lib/ledger.js')
+
+/**
+ * 造一个假请求与假响应。
+ * @param {object} options - body、method、remoteAddress。
+ */
+function fakeReq(options = {}) {
+  const body = options.body === undefined ? '' : JSON.stringify(options.body)
+  return {
+    method: options.method ?? 'POST',
+    url: options.url ?? '/dsh-middleman/api/state',
+    socket: { remoteAddress: options.remoteAddress ?? '127.0.0.1' },
+    async *[Symbol.asyncIterator]() {
+      if (body !== '') yield Buffer.from(body, 'utf8')
+    },
+  }
+}
+
+/**
+ * 造一个假响应，收集状态码与 JSON 体。
+ */
+function fakeRes() {
+  const captured = { status: 0, body: null }
+  return {
+    captured,
+    writeHead(status) { captured.status = status },
+    end(text) {
+      captured.body = text === undefined || text === null ? null : JSON.parse(text)
+    },
+  }
+}
+
+/**
+ * 造一批带票的批次。
+ * @param {string} id - 批次 id。
+ * @param {object} over - 票字段的覆盖。
+ */
+async function seedBatch(id, over = {}) {
+  const batch = blankBatch('路由测试批次')
+  batch.id = id
+  batch.cwd = home
+  batch.status = 'approved'
+  batch.parentSessionId = 'session-parent-1'
+  batch.questions = [{ question: 'q', answer: 'a' }, { question: 'q', answer: 'a' }, { question: 'q', answer: 'a' }]
+  batch.plan = { steps: ['一'], output: '产出', parallel: '无' }
+  batch.risks = [{
+    id: 'R-1', title: '风险', trigger: '触发', impact: '影响',
+    mitigation: '缓解', verification: '人工核对：看一眼',
+  }]
+  batch.tickets = [{
+    id: 'T-1',
+    title: '一张票',
+    brief: '做点事',
+    blockedBy: [],
+    riskIds: ['R-1'],
+    model: { provider: 'workbuddy', model: 'deepseek-v4.1-flash', reasoningEffort: 'high' },
+    modelReason: '快',
+    source: '.scratch/x.md',
+    payload: 'echo hi',
+    effort: 'high',
+    notes: { before: '先读 README', order: '先跑它', parallel: '无' },
+    status: 'suspended',
+    // 已经派出去的票：/run 与 /retarget 都要子会话 id。
+    childSessionId: 'session-child-1',
+    ...over,
+  }]
+  await save(batch)
+  return batch
+}
+
+/**
+ * 造一套路由与记录调用。
+ * @param {object} dispatcher - 假派发面。
+ */
+function setup(dispatcher = {}) {
+  const calls = []
+  const faces = {
+    dispatcher: {
+      async run(sessionId, text) { calls.push({ method: 'run', sessionId, text }) },
+      async cancel(sessionId) { calls.push({ method: 'cancel', sessionId }) },
+      async selectModel(sessionId, model) {
+        calls.push({ method: 'selectModel', sessionId, model })
+        return model
+      },
+      async modelCatalog() { return { groups: [{ id: 'g', name: 'G', models: [] }] } },
+      ...dispatcher,
+    },
+    warn() {},
+  }
+  const routes = makeRoutes(faces)
+  const byPath = new Map(routes.map((route) => [route.path, route]))
+  return { routes, byPath, calls }
+}
+
+/**
+ * 调一条路由。
+ * @param {object} route - 路由。
+ * @param {object} options - 请求选项。
+ */
+async function call(route, options = {}) {
+  const res = fakeRes()
+  await route.handler(fakeReq(options), res)
+  return res.captured
+}
+
+test('七条路由都在，而且每条都被真的调用过', async () => {
+  const { routes, byPath, calls } = setup()
+  // 先收敛再批准：/approve 只接受收敛后的批次。
+  await seedBatch('D-routes-all', { status: 'converged' })
+
+  const invoked = new Set()
+
+  // 1. /state（全部）
+  let r = await call(byPath.get('/dsh-middleman/api/state'), { method: 'GET', url: '/dsh-middleman/api/state' })
+  assert.equal(r.status, 200)
+  assert.ok(Array.isArray(r.body.batches))
+  invoked.add('/state')
+
+  // 2. /state（单个）
+  r = await call(byPath.get('/dsh-middleman/api/state'), {
+    method: 'GET', url: '/dsh-middleman/api/state?batchId=D-routes-all',
+  })
+  assert.equal(r.status, 200)
+  assert.equal(r.body.batch.id, 'D-routes-all')
+
+  // 3. /approve
+  r = await call(byPath.get('/dsh-middleman/api/approve'), { body: { batchId: 'D-routes-all' } })
+  assert.equal(r.status, 200)
+  assert.equal(r.body.ok, true)
+  invoked.add('/approve')
+
+  // 4. /run
+  r = await call(byPath.get('/dsh-middleman/api/run'), {
+    body: { batchId: 'D-routes-all', ticketId: 'T-1' },
+  })
+  assert.equal(r.status, 200)
+  assert.equal(r.body.ok, true)
+  invoked.add('/run')
+
+  // 5. /feedback
+  r = await call(byPath.get('/dsh-middleman/api/feedback'), {
+    body: { batchId: 'D-routes-all', ticketId: 'T-1', message: '换个方向' },
+  })
+  assert.equal(r.status, 200)
+  assert.equal(r.body.ok, true)
+  invoked.add('/feedback')
+
+  // 6. /retarget —— 这条就是漏测漏出 bug 的那条
+  r = await call(byPath.get('/dsh-middleman/api/retarget'), {
+    body: {
+      batchId: 'D-routes-all',
+      ticketId: 'T-1',
+      model: { provider: 'workbuddy', model: 'deepseek-v4.1-flash', reasoningEffort: 'medium' },
+      modelReason: '换个模型',
+    },
+  })
+  assert.equal(r.status, 200, '/retarget 应当成功，实际：' + JSON.stringify(r.body))
+  assert.equal(r.body.ok, true)
+  invoked.add('/retarget')
+
+  // 7. /cancel
+  r = await call(byPath.get('/dsh-middleman/api/cancel'), {
+    body: { batchId: 'D-routes-all', ticketId: 'T-1' },
+  })
+  assert.equal(r.status, 200)
+  assert.equal(r.body.ok, true)
+  invoked.add('/cancel')
+
+  // 8. /models
+  r = await call(byPath.get('/dsh-middleman/api/models'), { method: 'GET' })
+  assert.equal(r.status, 200)
+  assert.equal(r.body.ok, true)
+  invoked.add('/models')
+
+  // 每条都被调到了。
+  assert.equal(routes.length, 7)
+  for (const path of routes.map((route) => route.path)) {
+    assert.ok(invoked.has(path.replace('/dsh-middleman/api', '')), '这条路由从没被调用过：' + path)
+  }
+})
+
+test('/retarget 真的会去改子会话的模型', async () => {
+  const { byPath, calls } = setup()
+  await seedBatch('D-routes-retarget', { childSessionId: 'session-child-9' })
+
+  const r = await call(byPath.get('/dsh-middleman/api/retarget'), {
+    body: {
+      batchId: 'D-routes-retarget',
+      ticketId: 'T-1',
+      model: { provider: 'workbuddy', model: 'deepseek-v4.1-flash', reasoningEffort: 'medium' },
+    },
+  })
+
+  assert.equal(r.status, 200)
+  const select = calls.find((c) => c.method === 'selectModel')
+  assert.ok(select !== undefined, '没有去改子会话的模型')
+  assert.equal(select.sessionId, 'session-child-9')
+  assert.equal(select.model.reasoningEffort, 'medium')
+})
+
+test('/retarget 之后账本上的模型与强度都改了', async () => {
+  const { byPath } = setup()
+  await seedBatch('D-routes-retarget2', { childSessionId: 'session-child-10' })
+
+  await call(byPath.get('/dsh-middleman/api/retarget'), {
+    body: {
+      batchId: 'D-routes-retarget2',
+      ticketId: 'T-1',
+      model: { provider: 'workbuddy', model: 'glm-5.3', reasoningEffort: 'low' },
+    },
+  })
+
+  const saved = await load('D-routes-retarget2')
+  const ticket = saved.tickets[0]
+  assert.equal(ticket.model.model, 'glm-5.3')
+  assert.equal(ticket.model.reasoningEffort, 'low')
+  // 强度只有一个真相来源：effort 必须跟着 model 走。
+  assert.equal(ticket.effort, 'low', 'effort 没跟着 model.reasoningEffort 走，两个字段会分叉')
+})
+
+test('/retarget 钉不上模型时不装作成功', async () => {
+  const { byPath } = setup({
+    async selectModel() { throw new Error('网关拒绝了这个模型') },
+  })
+  await seedBatch('D-routes-retarget3', { childSessionId: 'session-child-11' })
+
+  const r = await call(byPath.get('/dsh-middleman/api/retarget'), {
+    body: {
+      batchId: 'D-routes-retarget3',
+      ticketId: 'T-1',
+      model: { provider: 'x', model: 'y' },
+    },
+  })
+
+  assert.notEqual(r.status, 200, '钉不上却回 200，等于账本改了、实际没改')
+  assert.equal(r.body.ok, false)
+
+  // 账本不能被改成新模型——否则卡片显示的与子会话跑的又对不上。
+  const saved = await load('D-routes-retarget3')
+  assert.equal(saved.tickets[0].model.model, 'deepseek-v4.1-flash', '失败的换模型却把账本改了')
+})
+
+test('/retarget 不带 model 时拒绝', async () => {
+  const { byPath } = setup()
+  await seedBatch('D-routes-retarget4')
+  const r = await call(byPath.get('/dsh-middleman/api/retarget'), {
+    body: { batchId: 'D-routes-retarget4', ticketId: 'T-1' },
+  })
+  assert.equal(r.status, 400)
+  assert.equal(r.body.code, 'invalid-request')
+})
+
+test('/retarget 在票还没派出去时只改账本', async () => {
+  const { byPath, calls } = setup()
+  // 还没派出去的票没有子会话 id。
+  await seedBatch('D-routes-retarget5', { childSessionId: undefined })
+
+  const r = await call(byPath.get('/dsh-middleman/api/retarget'), {
+    body: {
+      batchId: 'D-routes-retarget5',
+      ticketId: 'T-1',
+      model: { provider: 'workbuddy', model: 'glm-5.3', reasoningEffort: 'low' },
+    },
+  })
+
+  assert.equal(r.status, 200)
+  assert.equal(calls.filter((c) => c.method === 'selectModel').length, 0, '还没建会话，不该去钉模型')
+  const saved = await load('D-routes-retarget5')
+  assert.equal(saved.tickets[0].model.model, 'glm-5.3')
+})
+
+test('非环回连接一律拒绝', async () => {
+  const { byPath } = setup()
+  await seedBatch('D-routes-fence')
+  const r = await call(byPath.get('/dsh-middleman/api/state'), {
+    method: 'GET',
+    remoteAddress: '203.0.113.9',
+  })
+  assert.equal(r.status, 403)
+  assert.equal(r.body.code, 'forbidden')
+})
+
+test('不存在的批次给的是可读的拒绝，不是 500', async () => {
+  const { byPath } = setup()
+  const r = await call(byPath.get('/dsh-middleman/api/feedback'), {
+    body: { batchId: 'D-does-not-exist', ticketId: 'T-1', message: 'x' },
+  })
+  assert.notEqual(r.status, 500, '批次不存在不该报 500')
+  assert.equal(r.body.ok, false)
+})
+
+test('派发面上真的有 selectModel 这个方法', async () => {
+  // 这条是给 /retarget 兜底的。
+  //
+  // 上面那些路由测试用的都是假派发面——路由只要调了 faces.dispatcher.selectModel
+  // 就过，哪怕真派发面上根本没有这个方法。这正是那个 bug 活下来的原因：
+  // 「faces.dispatcher.selectModel is not a function」。
+  //
+  // 所以这里对着**真的** createDispatcher 检查：路由调用的每一个方法，
+  // 真派发面上都必须有。
+  const { createDispatcher } = await import('../lib/dispatch.js')
+  const dispatcher = createDispatcher({
+    call: async () => ({}),
+    readDefaultModel: () => undefined,
+    saveDefaultModel: async () => {},
+    warn() {},
+  })
+
+  const { byPath } = setup()
+  await seedBatch('D-routes-shape')
+
+  // 把路由里用到的 dispatcher 方法名都抠出来。
+  const source = readFileSync(new URL('../lib/routes.js', import.meta.url), 'utf8')
+  const used = new Set([...source.matchAll(/faces\.dispatcher\.(\w+)/g)].map((m) => m[1]))
+
+  assert.ok(used.size >= 4, '没从路由里抠出 dispatcher 方法名，实际：' + [...used].join(','))
+
+  for (const name of used) {
+    assert.equal(
+      typeof dispatcher[name],
+      'function',
+      '路由调用了 faces.dispatcher.' + name + '，但真派发面上没有这个方法',
+    )
+  }
+})
+
+test('清理临时目录', () => {
+  rmSync(home, { recursive: true, force: true })
+})
