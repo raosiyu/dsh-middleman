@@ -77,3 +77,44 @@ test('静态数用例的前提仍然成立（没人用 describe）', () => {
     )
   }
 })
+
+test('AUDIT.md 里写的总条数与清单实际条目数一致', () => {
+  // AUDIT.md 说「一共 31 条」，附录清单里就得更真的是 31 条。
+  // 同一类病：手写的数字会漂。这份文档本身就是讲这件事的，
+  // 它自己更不该漂。
+  const text = readFileSync(join(root, 'AUDIT.md'), 'utf8')
+
+  // 文档里声明总数的地方：「一共找出 **N 条**」
+  const claim = text.match(/一共找出 \*\*(\d+) 条\*\*/)
+  assert.ok(claim !== null, 'AUDIT.md 里没找到「一共找出 N 条」这句声明')
+  const declared = Number(claim[1])
+
+  // 清单实际条目：附录里所有行首的 "N. "
+  const appendix = text.split('## 附：31 条清单')[1]
+  assert.ok(appendix !== undefined, 'AUDIT.md 里没有附录清单')
+  const items = (appendix.match(/^\d+\. /gm) ?? []).length
+
+  assert.equal(
+    declared,
+    items,
+    'AUDIT.md 说一共 ' + declared + ' 条，清单里实际 ' + items + ' 条',
+  )
+})
+
+test('AUDIT.md 每段的条数与段标题里写的一致', () => {
+  const text = readFileSync(join(root, 'AUDIT.md'), 'utf8')
+  const appendix = text.split('## 附：31 条清单')[1]
+  assert.ok(appendix !== undefined)
+
+  // 段标题形如 **第一轮（16 条，核心规则层）**，后面跟 N 条清单项。
+  const sections = [...appendix.matchAll(/\*\*第[^*]*?（(\d+) 条[^*]*?\）\*\*([\s\S]*?)(?=\*\*第|$)/g)]
+  assert.ok(sections.length > 0, '没解析出任何分段')
+  for (const [, claimed, body] of sections) {
+    const actual = (body.match(/^\d+\. /gm) ?? []).length
+    assert.equal(
+      Number(claimed),
+      actual,
+      '段标题说 ' + claimed + ' 条，该段实际 ' + actual + ' 条',
+    )
+  }
+})

@@ -14,6 +14,7 @@
 
 > **第一次用请看 [USAGE.md](USAGE.md)** —— 装、怎么触发、卡片怎么看、模型怎么选、出错了怎么办，一篇读完。
 > 这份 README 讲的是它为什么这么做。
+> **要改它请先看 [AUDIT.md](AUDIT.md)** —— 这插件踩过的 31 个坑，以及怎么把它们再找一遍。
 
 ## 怎么触发
 
@@ -173,7 +174,7 @@ https://github.com/raosiyu/dsh-middleman
 ```sh
 git clone https://github.com/raosiyu/dsh-middleman.git
 cd dsh-middleman
-npm test          # 176 个功能用例 + 2 个文档对账用例，应该全绿
+npm test          # 176 个用例 + 4 条文档对账，应该全绿
 ```
 
 然后用上面「应用内安装」把本地目录装上。
