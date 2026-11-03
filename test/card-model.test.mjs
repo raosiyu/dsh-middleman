@@ -115,3 +115,36 @@ test('每个已知状态都有颜色', () => {
     assert.match(TONE[status], /^#[0-9a-f]{6}$/i, status)
   }
 })
+
+test('推理强度显示的是子会话真正会用的那个值，不是另一个近似字段', () => {
+  // 真事故：卡片上写 low，子会话其实跑 high。
+  //
+  // 派发时钉模型传的是 ticket.model.reasoningEffort（lib/dispatch.js 里
+  // session.selectModel 收的就是它），所以卡片必须以它为准。
+  // ticket.effort 只是冗余字段，两个值各自写进去时就会打架。
+  const view = ticketView({
+    id: 'T-1', title: 'x', status: 'suspended',
+    model: { provider: 'workbuddy', model: 'deepseek-v4.1-flash', reasoningEffort: 'high' },
+    effort: 'low',
+  })
+  const effort = view.fields.find(([label]) => label === '推理强度')
+  assert.deepEqual(effort, ['推理强度', 'high'])
+})
+
+test('model 里没写推理强度时才退回 effort', () => {
+  const view = ticketView({
+    id: 'T-1', title: 'x', status: 'pending',
+    model: { provider: 'workbuddy', model: 'deepseek-v4.1-flash' },
+    effort: 'medium',
+  })
+  const effort = view.fields.find(([label]) => label === '推理强度')
+  assert.deepEqual(effort, ['推理强度', 'medium'])
+})
+
+test('两个都没有时这一行不出现，不填占位话', () => {
+  const view = ticketView({
+    id: 'T-1', title: 'x', status: 'pending',
+    model: { provider: 'workbuddy', model: 'deepseek-v4.1-flash' },
+  })
+  assert.equal(view.fields.find(([label]) => label === '推理强度'), undefined)
+})
