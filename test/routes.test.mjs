@@ -320,16 +320,12 @@ test('派发面上真的有 selectModel 这个方法', async () => {
   // 真派发面上都必须有。
   const { createDispatcher } = await import('../lib/dispatch.js')
   const dispatcher = createDispatcher({
-    call: async () => ({}),
-    readDefaultModel: () => undefined,
-    saveDefaultModel: async () => {},
+    gateway: () => ({ invoke: async () => ({}) }),
+    peer: () => ({ id: 'peer-1' }),
+    defaultModel: () => undefined,
     warn() {},
   })
 
-  const { byPath } = setup()
-  await seedBatch('D-routes-shape')
-
-  // 把路由里用到的 dispatcher 方法名都抠出来。
   const source = readFileSync(new URL('../lib/routes.js', import.meta.url), 'utf8')
   const used = new Set([...source.matchAll(/faces\.dispatcher\.(\w+)/g)].map((m) => m[1]))
 
@@ -342,6 +338,76 @@ test('派发面上真的有 selectModel 这个方法', async () => {
       '路由调用了 faces.dispatcher.' + name + '，但真派发面上没有这个方法',
     )
   }
+})
+
+test('真派发面的 selectModel 真的会去网关钉模型，并恢复默认模型', async () => {
+  // 光「方法存在」不够——它还得真的干对事：
+  //   - 传 session.selectModel，参数里带 provider / model / reasoningEffort
+  //   - 换完把全局默认模型恢复回去（selectModel 有个副作用会改全局默认）
+  const { createDispatcher } = await import('../lib/dispatch.js')
+  const calls = []
+  const saved = []
+
+  const dispatcher = createDispatcher({
+    gateway: () => ({
+      async invoke({ namespace, method, args, peer, signal }) {
+        calls.push({ namespace, method, args, peer, signal })
+        if (method === 'selectModel') return { selected: { ...args.request, ok: true } }
+        return {}
+      },
+    }),
+    peer: () => ({ id: 'peer-1' }),
+    defaultModel: () => ({ provider: 'old-p', model: 'old-m' }),
+    defaultModelSave: async (value) => { saved.push(value) },
+    warn() {},
+  })
+
+  const result = await dispatcher.selectModel('session-x', {
+    provider: 'workbuddy',
+    model: 'deepseek-v4.1-flash',
+    reasoningEffort: 'medium',
+  })
+
+  const select = calls.find((c) => c.method === 'selectModel')
+  assert.ok(select !== undefined, '没有去网关钉模型')
+  assert.equal(select.namespace, 'session')
+  assert.deepEqual(select.args.request, {
+    sessionId: 'session-x',
+    provider: 'workbuddy',
+    model: 'deepseek-v4.1-flash',
+    reasoningEffort: 'medium',
+  })
+  assert.ok(select.signal !== undefined, '网关需要 signal，不给它会抛 aborted')
+  assert.ok(select.peer !== undefined, '网关需要 peer')
+
+  // 默认模型被恢复了。
+  assert.equal(saved.length, 1, '换完模型没有恢复全局默认模型')
+  assert.deepEqual(saved[0], { provider: 'old-p', model: 'old-m' })
+
+  assert.equal(result.model, 'deepseek-v4.1-flash')
+})
+
+test('钉模型失败时不装作成功', async () => {
+  const { createDispatcher } = await import('../lib/dispatch.js')
+  const dispatcher = createDispatcher({
+    gateway: () => ({
+      async invoke({ method }) {
+        if (method === 'selectModel') throw new Error('网关拒绝了这个模型')
+        return {}
+      },
+    }),
+    peer: () => ({ id: 'peer-1' }),
+    defaultModel: () => undefined,
+    warn() {},
+  })
+
+  await assert.rejects(
+    () => dispatcher.selectModel('session-y', { model: 'nope' }),
+    (error) => {
+      assert.equal(error.code, 'model-pin-failed')
+      return true
+    },
+  )
 })
 
 test('清理临时目录', () => {
