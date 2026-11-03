@@ -213,7 +213,7 @@ assert.ok(convergeProblems(cyc).some(p => p.includes('决定没定')),
 
 ```bash
 # 0）基线
-cd dsh-middleman
+cd dsh-whale-tail
 npm test                          # 应该全绿，记下数
 
 # 1）结构审计：让子代理读 lib/core.js，要求每条带可运行反例

@@ -1,5 +1,5 @@
 {
-  "name": "dsh-middleman",
+  "name": "dsh-whale-tail",
   "version": "0.1.0",
   "description": "主会话中台：盘问 → 收敛 → 人工批准 → 派发独立子会话（挂起等执行）→ turn/end 回传",
   "type": "module",

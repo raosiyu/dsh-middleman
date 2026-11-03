@@ -1,11 +1,11 @@
-# dsh-middleman bundle 层：一行宿主半区。
+# dsh-whale-tail bundle 层：一行宿主半区。
 #
 # 浏览器半区**不是**另一行 loader：它由 package.json 的 dsh.client 声明，
 # 由 web 应用自动加载 ./lib/client.js。写成独立行会让它当宿主插件装载，
 # 然后卡在「waiting for service: slots」——slots 是浏览器侧的服务。
 - insert:
-    - id: dsh-middleman
-      name: 'dsh-middleman'
+    - id: dsh-whale-tail
+      name: 'dsh-whale-tail'
       config:
         enabled: true
         announceToAgent: true

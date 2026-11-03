@@ -1,4 +1,4 @@
-# dsh-middleman 使用指南
+# dsh-whale-tail 使用指南
 
 > 主会话当中台：**盘问 → 收敛 → 人工批准 → 派发独立子会话（挂起等执行）→ 结果自动回传**
 
@@ -45,7 +45,7 @@ DeepSeek Harness 里已经有「把活派给子会话」的办法，但都差一
 ### 一键安装（推荐）
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/raosiyu/dsh-middleman/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/raosiyu/dsh-whale-tail/main/install.sh | sh
 ```
 
 装完**完全退出 DSH 再打开**，插件才会加载。
@@ -61,8 +61,8 @@ curl -fsSL https://raw.githubusercontent.com/raosiyu/dsh-middleman/main/install.
 ### 从源码
 
 ```sh
-git clone https://github.com/raosiyu/dsh-middleman.git
-cd dsh-middleman
+git clone https://github.com/raosiyu/dsh-whale-tail.git
+cd dsh-whale-tail
 npm test          # 188 个用例 + 4 条文档对账，应该全绿
 ```
 
@@ -87,10 +87,33 @@ npm test          # 188 个用例 + 4 条文档对账，应该全绿
 | 派活给子会话 | **「用中台派个子任务」**、**「开个设计批次」**、**「派发子任务」** | 开批次 → 盘问 → 收敛 → 等你批准 → 拆票 → 派发 |
 | 让它盘问你 | **「盘问一下」**、**「先盘问再动手」** | 连续几轮问你，每轮带一个风险探测 |
 | 只规划不派发 | **「流程规划」**、**「怎么分工」** | 写下分几步、产出什么、什么能并行 |
+| 停下来问你 | **「请确认」**（子会话主动叫，不用你说） | 票变 waiting，你在面板上答一句，它接着跑 |
 
 上面加粗的是**可靠触发词**，写在系统提示段末尾，模型一定认得。
 
 把需求说完整了模型也可能自己走这条路（比如「帮我设计一个插件，主会话派任务给子会话」——需求里明说了「派任务给子会话」）。但**别指望**只说「设计个插件」就一定进中台——那句话太泛，模型可能直接开干。
+
+### 子会话会主动停下来问你
+
+这是「鲸鱼尾巴」这名字的由来：**鲸鱼往前游，尾巴控制方向。**
+
+派出去的活跑到一半，如果遇到需要你拍板的地方（用 SQLite 还是 JSON、
+这个字段要不要兼容旧格式、走哪条方案），子会话会调
+`request_confirmation` **主动停下来**，而不是自己猜着做下去。
+
+停下来时你会看到：
+
+- 面板上那张票标成 **「等你确认」**
+- 上面写着：要定什么、有哪几个选项、子会话倾向哪个、为什么
+
+你在面板上答一句，答案就送进那个子会话，它接着跑。
+
+**它跟「失败」是两回事。** 之前没有这条通道时，子会话停下来只能记成
+failed——后继票被误挡，你也开始忽略失败通知。现在「等你」是一个单独
+的状态，一眼能看出来。
+
+不想让它停：子会话可以标 `blocking: false`，那样只留个记录（「我先按
+倾向的做，你有意见再说」），不打断。
 
 ### 不想花钱先看看长什么样
 
@@ -281,7 +304,7 @@ T-1 卡片可见性验证票  [suspended]
 
 ```sh
 # 看某个批次的详情
-curl -s http://127.0.0.1:<端口>/dsh-middleman/api/state?batchId=D-20261103-xxxx | python3 -m json.tool
+curl -s http://127.0.0.1:<端口>/whale-tail/api/state?batchId=D-20261103-xxxx | python3 -m json.tool
 ```
 
 台账在 `~/.dsh/middleman/designs/<batchId>.json`，一个批次一份，只存状态与引用，不存对话正文。
@@ -326,7 +349,7 @@ npm test    # 188 个用例 + 4 条文档对账
 |---|---|
 | 台账（一个批次一份） | `~/.dsh/middleman/designs/<batchId>.json` |
 | 会话正文 | 各自会话里，台账不存 |
-| 插件源码 | <https://github.com/raosiyu/dsh-middleman> |
-| 卸载 | `~/.dsh/profiles/desktop/node_modules/dsh-middleman` + `package.json` 的 `dsh.profile.bundles` |
+| 插件源码 | <https://github.com/raosiyu/dsh-whale-tail> |
+| 卸载 | `~/.dsh/profiles/desktop/node_modules/dsh-whale-tail` + `package.json` 的 `dsh.profile.bundles` |
 
 MIT 许可。

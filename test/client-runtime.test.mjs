@@ -84,7 +84,7 @@ function loadBundle(fetchStub) {
   const fakeWindow = {
     __ModuleLoader__: {
       load(spec) {
-        assert.equal(spec.id, 'dsh-middleman')
+        assert.equal(spec.id, 'dsh-whale-tail')
         const module = spec.factory(() => React)
 
         const ctx = {

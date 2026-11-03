@@ -11,7 +11,7 @@
  *
  * 流程：
  *   1. esbuild 把 scripts/harness-entry.jsx 打成单文件（含 React）；
- *   2. 起一个本地服务器：页面 + /dsh-middleman/api/* 代理到真插件；
+ *   2. 起一个本地服务器：页面 + /whale-tail/api/* 代理到真插件；
  *   3. 用 CDP 打开页面、等卡片渲染完、截图。
  *
  * 依赖（React 与 esbuild 只在验证时用，不进插件运行时）：
@@ -95,7 +95,7 @@ const html = `<!doctype html>
 
 // 2. 起服务器：静态页 + 把插件的 API 原样代理过去。
 const server = createServer(async (req, res) => {
-  if (req.url?.startsWith('/dsh-middleman/api/')) {
+  if (req.url?.startsWith('/whale-tail/api/')) {
     try {
       const upstream = await fetch(APP + req.url, {
         method: req.method,

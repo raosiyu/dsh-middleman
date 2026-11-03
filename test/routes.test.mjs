@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const home = mkdtempSync(join(tmpdir(), 'mm-routes-'))
-process.env.MM_HOME = home
+process.env.WT_HOME = home
 
 const { makeRoutes } = await import('../lib/routes.js')
 const { blankBatch, save, load } = await import('../lib/ledger.js')
@@ -28,7 +28,7 @@ function fakeReq(options = {}) {
   const body = options.body === undefined ? '' : JSON.stringify(options.body)
   return {
     method: options.method ?? 'POST',
-    url: options.url ?? '/dsh-middleman/api/state',
+    url: options.url ?? '/whale-tail/api/state',
     socket: { remoteAddress: options.remoteAddress ?? '127.0.0.1' },
     async *[Symbol.asyncIterator]() {
       if (body !== '') yield Buffer.from(body, 'utf8')
@@ -132,26 +132,26 @@ test('八条路由都在，而且每条都被真的调用过', async () => {
   const invoked = new Set()
 
   // 1. /state（全部）
-  let r = await call(byPath.get('/dsh-middleman/api/state'), { method: 'GET', url: '/dsh-middleman/api/state' })
+  let r = await call(byPath.get('/whale-tail/api/state'), { method: 'GET', url: '/whale-tail/api/state' })
   assert.equal(r.status, 200)
   assert.ok(Array.isArray(r.body.batches))
   invoked.add('/state')
 
   // 2. /state（单个）
-  r = await call(byPath.get('/dsh-middleman/api/state'), {
-    method: 'GET', url: '/dsh-middleman/api/state?batchId=D-routes-all',
+  r = await call(byPath.get('/whale-tail/api/state'), {
+    method: 'GET', url: '/whale-tail/api/state?batchId=D-routes-all',
   })
   assert.equal(r.status, 200)
   assert.equal(r.body.batch.id, 'D-routes-all')
 
   // 3. /approve
-  r = await call(byPath.get('/dsh-middleman/api/approve'), { body: { batchId: 'D-routes-all' } })
+  r = await call(byPath.get('/whale-tail/api/approve'), { body: { batchId: 'D-routes-all' } })
   assert.equal(r.status, 200)
   assert.equal(r.body.ok, true)
   invoked.add('/approve')
 
   // 4. /run
-  r = await call(byPath.get('/dsh-middleman/api/run'), {
+  r = await call(byPath.get('/whale-tail/api/run'), {
     body: { batchId: 'D-routes-all', ticketId: 'T-1' },
   })
   assert.equal(r.status, 200)
@@ -159,7 +159,7 @@ test('八条路由都在，而且每条都被真的调用过', async () => {
   invoked.add('/run')
 
   // 5. /feedback
-  r = await call(byPath.get('/dsh-middleman/api/feedback'), {
+  r = await call(byPath.get('/whale-tail/api/feedback'), {
     body: { batchId: 'D-routes-all', ticketId: 'T-1', message: '换个方向' },
   })
   assert.equal(r.status, 200)
@@ -167,7 +167,7 @@ test('八条路由都在，而且每条都被真的调用过', async () => {
   invoked.add('/feedback')
 
   // 6. /retarget —— 这条就是漏测漏出 bug 的那条
-  r = await call(byPath.get('/dsh-middleman/api/retarget'), {
+  r = await call(byPath.get('/whale-tail/api/retarget'), {
     body: {
       batchId: 'D-routes-all',
       ticketId: 'T-1',
@@ -180,7 +180,7 @@ test('八条路由都在，而且每条都被真的调用过', async () => {
   invoked.add('/retarget')
 
   // 7. /cancel
-  r = await call(byPath.get('/dsh-middleman/api/cancel'), {
+  r = await call(byPath.get('/whale-tail/api/cancel'), {
     body: { batchId: 'D-routes-all', ticketId: 'T-1' },
   })
   assert.equal(r.status, 200)
@@ -188,7 +188,7 @@ test('八条路由都在，而且每条都被真的调用过', async () => {
   invoked.add('/cancel')
 
   // 8. /models
-  r = await call(byPath.get('/dsh-middleman/api/models'), { method: 'GET' })
+  r = await call(byPath.get('/whale-tail/api/models'), { method: 'GET' })
   assert.equal(r.status, 200)
   assert.equal(r.body.ok, true)
   invoked.add('/models')
@@ -209,7 +209,7 @@ test('八条路由都在，而且每条都被真的调用过', async () => {
     }]
     await save(batch)
   }
-  r = await call(byPath.get('/dsh-middleman/api/answer'), {
+  r = await call(byPath.get('/whale-tail/api/answer'), {
     body: { batchId: 'D-routes-all', ticketId: 'T-1', answer: 'A' },
   })
   assert.equal(r.status, 200)
@@ -220,7 +220,7 @@ test('八条路由都在，而且每条都被真的调用过', async () => {
   // 每条都被调到了。
   assert.equal(routes.length, 8)
   for (const path of routes.map((route) => route.path)) {
-    assert.ok(invoked.has(path.replace('/dsh-middleman/api', '')), '这条路由从没被调用过：' + path)
+    assert.ok(invoked.has(path.replace('/whale-tail/api', '')), '这条路由从没被调用过：' + path)
   }
 })
 
@@ -228,7 +228,7 @@ test('/retarget 真的会去改子会话的模型', async () => {
   const { byPath, calls } = setup()
   await seedBatch('D-routes-retarget', { childSessionId: 'session-child-9' })
 
-  const r = await call(byPath.get('/dsh-middleman/api/retarget'), {
+  const r = await call(byPath.get('/whale-tail/api/retarget'), {
     body: {
       batchId: 'D-routes-retarget',
       ticketId: 'T-1',
@@ -247,7 +247,7 @@ test('/retarget 之后账本上的模型与强度都改了', async () => {
   const { byPath } = setup()
   await seedBatch('D-routes-retarget2', { childSessionId: 'session-child-10' })
 
-  await call(byPath.get('/dsh-middleman/api/retarget'), {
+  await call(byPath.get('/whale-tail/api/retarget'), {
     body: {
       batchId: 'D-routes-retarget2',
       ticketId: 'T-1',
@@ -269,7 +269,7 @@ test('/retarget 钉不上模型时不装作成功', async () => {
   })
   await seedBatch('D-routes-retarget3', { childSessionId: 'session-child-11' })
 
-  const r = await call(byPath.get('/dsh-middleman/api/retarget'), {
+  const r = await call(byPath.get('/whale-tail/api/retarget'), {
     body: {
       batchId: 'D-routes-retarget3',
       ticketId: 'T-1',
@@ -288,7 +288,7 @@ test('/retarget 钉不上模型时不装作成功', async () => {
 test('/retarget 不带 model 时拒绝', async () => {
   const { byPath } = setup()
   await seedBatch('D-routes-retarget4')
-  const r = await call(byPath.get('/dsh-middleman/api/retarget'), {
+  const r = await call(byPath.get('/whale-tail/api/retarget'), {
     body: { batchId: 'D-routes-retarget4', ticketId: 'T-1' },
   })
   assert.equal(r.status, 400)
@@ -300,7 +300,7 @@ test('/retarget 在票还没派出去时只改账本', async () => {
   // 还没派出去的票没有子会话 id。
   await seedBatch('D-routes-retarget5', { childSessionId: undefined })
 
-  const r = await call(byPath.get('/dsh-middleman/api/retarget'), {
+  const r = await call(byPath.get('/whale-tail/api/retarget'), {
     body: {
       batchId: 'D-routes-retarget5',
       ticketId: 'T-1',
@@ -317,7 +317,7 @@ test('/retarget 在票还没派出去时只改账本', async () => {
 test('非环回连接一律拒绝', async () => {
   const { byPath } = setup()
   await seedBatch('D-routes-fence')
-  const r = await call(byPath.get('/dsh-middleman/api/state'), {
+  const r = await call(byPath.get('/whale-tail/api/state'), {
     method: 'GET',
     remoteAddress: '203.0.113.9',
   })
@@ -327,7 +327,7 @@ test('非环回连接一律拒绝', async () => {
 
 test('不存在的批次给的是可读的拒绝，不是 500', async () => {
   const { byPath } = setup()
-  const r = await call(byPath.get('/dsh-middleman/api/feedback'), {
+  const r = await call(byPath.get('/whale-tail/api/feedback'), {
     body: { batchId: 'D-does-not-exist', ticketId: 'T-1', message: 'x' },
   })
   assert.notEqual(r.status, 500, '批次不存在不该报 500')
@@ -444,7 +444,7 @@ test('/feedback 在子会话跑着的时候直接 steer 它', async () => {
   const { byPath, calls } = setup()
   await seedBatch('D-feedback-running', { status: 'running' })
 
-  const r = await call(byPath.get('/dsh-middleman/api/feedback'), {
+  const r = await call(byPath.get('/whale-tail/api/feedback'), {
     body: { batchId: 'D-feedback-running', ticketId: 'T-1', message: '方向反了，先看 README' },
   })
 
@@ -462,7 +462,7 @@ test('/feedback 在票还挂着的时候推给主会话', async () => {
   const { byPath, calls } = setup()
   await seedBatch('D-feedback-suspended', { status: 'suspended' })
 
-  const r = await call(byPath.get('/dsh-middleman/api/feedback'), {
+  const r = await call(byPath.get('/whale-tail/api/feedback'), {
     body: { batchId: 'D-feedback-suspended', ticketId: 'T-1', message: '换个方向' },
   })
 
@@ -481,7 +481,7 @@ test('/feedback steer 失败时不装作送到了', async () => {
   })
   await seedBatch('D-feedback-steer-fail', { status: 'running' })
 
-  const r = await call(byPath.get('/dsh-middleman/api/feedback'), {
+  const r = await call(byPath.get('/whale-tail/api/feedback'), {
     body: { batchId: 'D-feedback-steer-fail', ticketId: 'T-1', message: 'x' },
   })
 
@@ -493,7 +493,7 @@ test('/feedback steer 失败时不装作送到了', async () => {
 test('意见为空时拒绝', async () => {
   const { byPath } = setup()
   await seedBatch('D-feedback-empty')
-  const r = await call(byPath.get('/dsh-middleman/api/feedback'), {
+  const r = await call(byPath.get('/whale-tail/api/feedback'), {
     body: { batchId: 'D-feedback-empty', ticketId: 'T-1', message: '   ' },
   })
   assert.equal(r.status, 400)

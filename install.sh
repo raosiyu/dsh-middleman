@@ -1,5 +1,5 @@
 #!/bin/sh
-# dsh-middleman 一键安装。
+# dsh-whale-tail 一键安装。
 #
 # 桌面版（Electron 应用）的 profile 由应用自己管，命令行
 # `dsh plugin --profile desktop add` 会被直接拒绝：
@@ -11,15 +11,15 @@
 # 装完完全退出 DSH 再打开，插件才会加载。
 #
 # 用法：
-#   curl -fsSL https://raw.githubusercontent.com/raosiyu/dsh-middleman/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/raosiyu/dsh-whale-tail/main/install.sh | sh
 #   ./install.sh                    # 装到默认 profile
 #   ./install.sh --profile web      # 装到别的 profile
 #   ./install.sh --dry-run          # 只打印会发生什么
 #   ./install.sh --uninstall        # 卸掉
 set -eu
 
-REPO="raosiyu/dsh-middleman"
-PKG="dsh-middleman"
+REPO="raosiyu/dsh-whale-tail"
+PKG="dsh-whale-tail"
 PROFILE="desktop"
 DRY=0
 UNINSTALL=0
@@ -55,10 +55,10 @@ if [ "$UNINSTALL" = "1" ]; then
     const fs = require("fs")
     const file = process.argv[1]
     const pkg = JSON.parse(fs.readFileSync(file, "utf8"))
-    if (pkg.dependencies) delete pkg.dependencies["dsh-middleman"]
+    if (pkg.dependencies) delete pkg.dependencies["dsh-whale-tail"]
     const bundles = pkg.dsh?.profile?.bundles
     if (Array.isArray(bundles)) {
-      pkg.dsh.profile.bundles = bundles.filter((name) => name !== "dsh-middleman")
+      pkg.dsh.profile.bundles = bundles.filter((name) => name !== "dsh-whale-tail")
     }
     fs.writeFileSync(file, JSON.stringify(pkg, null, 2) + "\n")
   ' "$PKG_JSON"

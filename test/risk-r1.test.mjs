@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const home = mkdtempSync(join(tmpdir(), 'mm-r1-'))
-process.env.MM_HOME = home
+process.env.WT_HOME = home
 
 const { buildTools } = await import('../lib/tools.js')
 const { blankBatch, save } = await import('../lib/ledger.js')

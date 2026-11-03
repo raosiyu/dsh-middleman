@@ -1,6 +1,10 @@
-# dsh-middleman
+# 鲸鱼尾巴 · dsh-whale-tail
 
-主会话当中台：**盘问 → 收敛 → 人工批准 → 派发独立子会话（挂起等执行）→ 结果自动回传**。
+主会话当**鲸鱼尾巴**：**盘问 → 收敛 → 人工批准 → 派发独立子会话（挂起等执行）→ 结果自动回传**，
+跑到一半需要你拍板的地方，子会话会**主动停下来问你**。
+
+名字的意思是：鲸鱼往前游，尾巴控制方向。它不是让 AI 游得更快——是让它在
+该拐弯的地方停下来等你。
 
 一个 DeepSeek Harness（DSH）插件。它补的是现成方案缺的那一层：
 
@@ -136,7 +140,7 @@ R-4 的理由：风险登记由模型自己写，「验证方式」也是模型�
 ### 一键安装（推荐）
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/raosiyu/dsh-middleman/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/raosiyu/dsh-whale-tail/main/install.sh | sh
 ```
 
 脚本做三件事：把包 `pnpm add` 进 profile 的 node_modules、把 bundle 名挂进
@@ -164,7 +168,7 @@ profile 的 `dsh.profile.bundles`、跑一遍测试自检。全自动，不用�
 3. 粘贴仓库地址或本地路径：
 
 ```
-https://github.com/raosiyu/dsh-middleman
+https://github.com/raosiyu/dsh-whale-tail
 ```
 
 4. **完全退出应用，再打开**
@@ -172,8 +176,8 @@ https://github.com/raosiyu/dsh-middleman
 ### 从源码
 
 ```sh
-git clone https://github.com/raosiyu/dsh-middleman.git
-cd dsh-middleman
+git clone https://github.com/raosiyu/dsh-whale-tail.git
+cd dsh-whale-tail
 npm test          # 188 个用例 + 4 条文档对账，应该全绿
 ```
 
@@ -263,7 +267,7 @@ mkdir -p /tmp/mm-harness && cd /tmp/mm-harness && npm init -y && npm i react rea
 node scripts/visual-harness.mjs <batchId> <ticketId> <outDir>
 ```
 
-它会起一个本地服务器（页面的 `/dsh-middleman/api/*` 代理到真插件），用 CDP 打开页面、等卡片渲染完，输出 `dispatch-card.png` 与 `dispatch-card.txt`。
+它会起一个本地服务器（页面的 `/whale-tail/api/*` 代理到真插件），用 CDP 打开页面、等卡片渲染完，输出 `dispatch-card.png` 与 `dispatch-card.txt`。
 
 **这个台子抓到过一个真 bug**：卡片上写「推理强度 low」，子会话其实跑的是 high——工单里 `model.reasoningEffort`（派发时真正传下去的那个）与 `effort`（冗余字段）各写各的，判断层优先读了后者。
 

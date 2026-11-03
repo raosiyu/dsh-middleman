@@ -55,9 +55,9 @@ const ticketId = new URLSearchParams(location.search).get('ticketId')
 async function boot() {
   const root = createRoot(document.getElementById('root'))
 
-  // 卡片自己会去 /dsh-middleman/api/state?batchId=… 拿工单，
+  // 卡片自己会去 /whale-tail/api/state?batchId=… 拿工单，
   // 验证台的服务器把这条请求代理到真插件，数据是真的。
-  const res = await fetch('/dsh-middleman/api/state?batchId=' + encodeURIComponent(batchId))
+  const res = await fetch('/whale-tail/api/state?batchId=' + encodeURIComponent(batchId))
   const state = await res.json()
   const ticket = (state.batch?.tickets ?? []).find((t) => t.id === ticketId)
   if (ticket === undefined) {

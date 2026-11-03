@@ -18,7 +18,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const home = mkdtempSync(join(tmpdir(), 'mm-tools-'))
-process.env.MM_HOME = home
+process.env.WT_HOME = home
 
 const { buildTools } = await import('../lib/tools.js')
 const { blankBatch, save, load } = await import('../lib/ledger.js')
@@ -216,12 +216,12 @@ test('批次没有主会话时，feedback 说清楚它哪儿也没送到', async
 
   const { faces, calls } = fakeFaces()
   const routes = makeRoutes(faces)
-  const feedback = routes.find((r) => r.path === '/dsh-middleman/api/feedback')
+  const feedback = routes.find((r) => r.path === '/whale-tail/api/feedback')
 
   const captured = { status: 0, body: null }
   await feedback.handler({
     method: 'POST',
-    url: '/dsh-middleman/api/feedback',
+    url: '/whale-tail/api/feedback',
     socket: { remoteAddress: '127.0.0.1' },
     async *[Symbol.asyncIterator]() {
       yield Buffer.from(JSON.stringify({ batchId: batch.id, ticketId: 'T-1', message: '改一下' }), 'utf8')
@@ -256,11 +256,11 @@ test('/retarget 写回宿主真正选中的，不是我们请求的', async () =
     },
   })
   const routes = makeRoutes(faces)
-  const retarget = routes.find((r) => r.path === '/dsh-middleman/api/retarget')
+  const retarget = routes.find((r) => r.path === '/whale-tail/api/retarget')
 
   await retarget.handler({
     method: 'POST',
-    url: '/dsh-middleman/api/retarget',
+    url: '/whale-tail/api/retarget',
     socket: { remoteAddress: '127.0.0.1' },
     async *[Symbol.asyncIterator]() {
       yield Buffer.from(JSON.stringify({

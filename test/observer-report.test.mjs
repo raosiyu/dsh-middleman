@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const home = mkdtempSync(join(tmpdir(), 'mm-observer-'))
-process.env.MM_HOME = home
+process.env.WT_HOME = home
 
 const { installObserver } = await import('../lib/observer.js')
 const { blankBatch, save, list } = await import('../lib/ledger.js')
