@@ -8,7 +8,7 @@ import assert from 'node:assert/strict'
 import {
   frontier, blocked, nextRound, dependencyProblems, openCount,
   riskGaps, riskProblems, convergeProblems, approveProblems, dispatchProblems,
-  readyTickets, classifyTurnEnd, RISK_FIELDS,
+  readyTickets, classifyTurnEnd, RISK_FIELDS, designGateProblems, MIN_ANSWERED_QUESTIONS,
 } from '../lib/core.js'
 
 /** 一棵已经全部定完、风险齐全、工单合法的最小批次。 */
@@ -19,6 +19,14 @@ function goodBatch() {
     decisions: [
       { id: 'D1', kind: 'goal', title: 't', body: 'b', dependsOn: [], answer: 'a' },
     ],
+    // 盘问账本：三个已回答的问题。
+    questions: [
+      { id: 'Q1', question: 'q1', answer: 'a1', kind: 'goal' },
+      { id: 'Q2', question: 'q2', answer: 'a2', kind: 'scope' },
+      { id: 'Q3', question: 'q3', answer: 'a3', kind: 'risk' },
+    ],
+    // 流程规划。
+    plan: { steps: '一步做完', output: '一个能跑的东西' },
     risks: [
       { id: 'R-1', title: 'r', trigger: '触发条件够长', impact: '影响够长了', mitigation: '缓解够长了', verification: '验证够长了' },
     ],
@@ -155,6 +163,44 @@ test('依赖指向不存在的决定就拦住', () => {
 test('完全合法的批次三道闸门都过', () => {
   assert.deepEqual(convergeProblems(goodBatch()), [])
   assert.deepEqual(dispatchProblems(goodBatch()), [])
+})
+
+test('设计闸门：盘问不够三个就拦住派发', () => {
+  const batch = goodBatch()
+  batch.questions = batch.questions.slice(0, 2)
+  assert.ok(designGateProblems(batch).some((p) => p.includes('盘问没做够')))
+  assert.ok(dispatchProblems(batch).some((p) => p.includes('盘问没做够')))
+})
+
+test('设计闸门：没有流程规划就拦住派发', () => {
+  const batch = goodBatch()
+  batch.plan = undefined
+  assert.ok(designGateProblems(batch).some((p) => p.includes('流程规划')))
+})
+
+test('设计闸门：流程规划缺 steps 或 output 也算没写', () => {
+  const batch = goodBatch()
+  batch.plan = { steps: '', output: '有产出' }
+  assert.ok(designGateProblems(batch).some((p) => p.includes('缺 steps')))
+
+  batch.plan = { steps: '有步骤', output: '' }
+  assert.ok(designGateProblems(batch).some((p) => p.includes('缺 output')))
+})
+
+test('设计闸门：风险清单为空就拦住派发', () => {
+  const batch = goodBatch()
+  batch.risks = []
+  assert.ok(designGateProblems(batch).some((p) => p.includes('风险清单是空的')))
+})
+
+test('设计闸门：空答案不算已回答', () => {
+  const batch = goodBatch()
+  batch.questions = [
+    { id: 'Q1', question: 'q', answer: '  ' },
+    { id: 'Q2', question: 'q', answer: 'a' },
+    { id: 'Q3', question: 'q', answer: 'a' },
+  ]
+  assert.ok(designGateProblems(batch).some((p) => p.includes('盘问没做够')))
 })
 
 test('就绪工单要等前置完成', () => {

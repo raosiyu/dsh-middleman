@@ -65,14 +65,15 @@ test('inject 声明了全部必需服务', () => {
   ])
 })
 
-test('apply 注册了七个工具', () => {
+test('apply 注册了九个工具', () => {
   const { ctx, registered } = fakeCtx()
   apply(ctx, { enabled: true, announceToAgent: true })
-  assert.equal(registered.tools.length, 7)
+  assert.equal(registered.tools.length, 9)
   const names = registered.tools.map((t) => t.name).sort()
   assert.deepEqual(names, [
-    'design_answer', 'design_converge', 'design_open',
-    'design_round', 'design_split', 'dispatch_task', 'middleman_status',
+    'design_answer', 'design_converge', 'design_open', 'design_plan',
+    'design_question', 'design_round', 'design_split',
+    'dispatch_task', 'middleman_status',
   ])
 })
 
