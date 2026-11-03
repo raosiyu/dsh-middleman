@@ -178,3 +178,38 @@ test('宿主回包带的强度会被采纳（用户没写但宿主认了）', as
 
   assert.equal(spawned.model.reasoningEffort, 'medium')
 })
+
+test('读不到子会话历史时要说「读不到」，不能装作「它没说话」', async () => {
+  // 真事故：tail() 在流式端点不可用时静默返回 []，观察器于是把回报写成
+  // 「(没有文字答复)」——人以为子会话真的什么都没干，而真相是我们没读到。
+  //
+  // 判据：读不到就是读不到，两件事不能混。
+  const dispatcher = createDispatcher({ gateway: () => ({ invoke: async () => ({}) }), peer: () => ({}) })
+  await assert.rejects(
+    () => dispatcher.tail('session-x'),
+    (error) => {
+      assert.equal(error.code, 'tail-unavailable')
+      assert.match(error.message, /读不到/)
+      return true
+    },
+  )
+})
+
+test('宿主没返回历史快照时也要说读不到', async () => {
+  const dispatcher = createDispatcher({
+    gateway: () => ({ invoke: async () => ({}) }),
+    peer: () => ({}),
+    stream: async () => ({
+      async *[Symbol.asyncIterator]() {
+        yield { type: 'something-else' }
+      },
+    }),
+  })
+  await assert.rejects(
+    () => dispatcher.tail('session-x'),
+    (error) => {
+      assert.equal(error.code, 'tail-unavailable')
+      return true
+    },
+  )
+})
