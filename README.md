@@ -170,7 +170,7 @@ https://github.com/raosiyu/dsh-middleman
 ```sh
 git clone https://github.com/raosiyu/dsh-middleman.git
 cd dsh-middleman
-npm test          # 108 个用例，应该全绿
+npm test          # 112 个用例，应该全绿
 ```
 
 然后用上面「应用内安装」把本地目录装上。
@@ -244,7 +244,7 @@ node bin/mm.mjs
 node --test test/*.test.mjs
 ```
 
-108 个用例：前沿计算、四道闸门、环检测、风险四栏、设计闸门、`turn/end` 分类、派发顺序、默认模型恢复、路由与工具注册、浏览器 bundle 的运行期守卫、推理强度的单一真相来源。
+112 个用例：前沿计算、四道闸门、环检测、风险四栏、设计闸门、`turn/end` 分类、派发顺序、默认模型恢复、路由与工具注册、浏览器 bundle 的运行期守卫、推理强度的单一真相来源、触发词不许被悄悄删掉。
 
 ### 派发卡片的可视验证台
 
