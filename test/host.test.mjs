@@ -65,15 +65,15 @@ test('inject 声明了全部必需服务', () => {
   ])
 })
 
-test('apply 注册了九个工具', () => {
+test('apply 注册了十个工具', () => {
   const { ctx, registered } = fakeCtx()
   apply(ctx, { enabled: true, announceToAgent: true })
-  assert.equal(registered.tools.length, 9)
+  assert.equal(registered.tools.length, 10)
   const names = registered.tools.map((t) => t.name).sort()
   assert.deepEqual(names, [
     'design_answer', 'design_converge', 'design_open', 'design_plan',
     'design_question', 'design_round', 'design_split',
-    'dispatch_task', 'middleman_status',
+    'dispatch_task', 'middleman_status', 'request_confirmation',
   ])
 })
 
@@ -84,11 +84,11 @@ test('工具面里没有 approve —— 模型不能批准自己的设计', () =
   assert.equal(names.some((name) => name.includes('approve')), false)
 })
 
-test('apply 注册了七个路由，且都在本插件前缀下', () => {
+test('apply 注册了八个路由，且都在本插件前缀下', () => {
   const { ctx, registered } = fakeCtx()
   apply(ctx, { enabled: true })
   // effect 已经在 apply 里执行过了，这里不再重复调用，否则会重复注册。
-  assert.equal(registered.routes.length, 7)
+  assert.equal(registered.routes.length, 8)
   for (const route of registered.routes) {
     assert.ok(route.path.startsWith('/dsh-middleman/api'), route.path)
     assert.equal(typeof route.handler, 'function')

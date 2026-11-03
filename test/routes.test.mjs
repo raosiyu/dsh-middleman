@@ -124,7 +124,7 @@ async function call(route, options = {}) {
   return res.captured
 }
 
-test('七条路由都在，而且每条都被真的调用过', async () => {
+test('八条路由都在，而且每条都被真的调用过', async () => {
   const { routes, byPath, calls } = setup()
   // 先收敛再批准：/approve 只接受收敛后的批次。
   await seedBatch('D-routes-all', { status: 'converged' })
@@ -193,8 +193,32 @@ test('七条路由都在，而且每条都被真的调用过', async () => {
   assert.equal(r.body.ok, true)
   invoked.add('/models')
 
+  // 9. /answer —— 先把票做成「在等人」，再答它。
+  //
+  // 这条必须是**真的调用**：新加一条路由却没人调过，等于它能坏而
+  // 没人知道——这正是本文件存在的理由（上一版有条路由调了个不存在
+  // 的方法，全绿，因为没人真的调它）。
+  {
+    const { load, save } = await import('../lib/ledger.js')
+    const batch = await load('D-routes-all')
+    batch.tickets = [{
+      id: 'T-1', title: '票', brief: 'b', blockedBy: [], riskIds: [], riskFree: true,
+      riskFreeReason: '只是路由测试', model: { provider: 'p', model: 'm' },
+      modelReason: 'r', status: 'waiting', childSessionId: 'session-routes-answer',
+      waiting: { question: '要 A 还是 B？', askedAt: Date.now(), sessionId: 'session-routes-answer' },
+    }]
+    await save(batch)
+  }
+  r = await call(byPath.get('/dsh-middleman/api/answer'), {
+    body: { batchId: 'D-routes-all', ticketId: 'T-1', answer: 'A' },
+  })
+  assert.equal(r.status, 200)
+  assert.equal(r.body.ok, true)
+  assert.equal(r.body.status, 'running')
+  invoked.add('/answer')
+
   // 每条都被调到了。
-  assert.equal(routes.length, 7)
+  assert.equal(routes.length, 8)
   for (const path of routes.map((route) => route.path)) {
     assert.ok(invoked.has(path.replace('/dsh-middleman/api', '')), '这条路由从没被调用过：' + path)
   }
