@@ -19,7 +19,7 @@ const home = mkdtempSync(join(tmpdir(), 'mm-observer-'))
 process.env.MM_HOME = home
 
 const { installObserver } = await import('../lib/observer.js')
-const { blankBatch, save } = await import('../lib/ledger.js')
+const { blankBatch, save, list } = await import('../lib/ledger.js')
 
 /**
  * 造一个只记监听器的假 ctx。
@@ -66,8 +66,11 @@ function fakeFaces(tailRecords) {
  *
  * reportedTurn 故意不预置：观察器第一次看到这张票时还没报过，
  * 所以应该照报。
+ *
+ * status 默认 running（跑着的票）——观察器只结算跑过的票。
+ * 传 suspended / pending 可以造出「没跑过」的票。
  */
-async function seedBatch(childSessionId) {
+async function seedBatch(childSessionId, status = 'running') {
   const batch = blankBatch('观察器验证')
   batch.parentSessionId = 'session-parent'
   batch.tickets = [{
@@ -84,11 +87,17 @@ async function seedBatch(childSessionId) {
     payload: undefined,
     effort: undefined,
     notes: undefined,
-    status: 'running',
+    status,
     childSessionId,
   }]
   await save(batch)
   return batch
+}
+
+/** 把台账读回来，看票被改成什么了。 */
+async function loadBatch() {
+  const rows = await list()
+  return rows.find((row) => row.parentSessionId === 'session-parent')
 }
 
 /** 一条 tail 记录：一个助手消息带文字。形状跟宿主回包一致。 */
@@ -201,4 +210,39 @@ test('读历史失败时，回传照样到主会话，只是正文为空', async
 
 test.after(() => {
   rmSync(home, { recursive: true, force: true })
+})
+
+test('票还挂着没跑过时，不结算也不回传', async () => {
+  // 真事故：dispatch_task 建好子会话并挂起，人还没点「执行」。
+  // 这时候来一个 turn/end，观察器把这张没跑过的票标成 done，
+  // 还给主会话回一条「任务完成」——主会话于是以为活干完了。
+  await seedBatch('session-child-not-run', 'suspended')
+  const ctx = fakeCtx()
+  const { faces, runs } = fakeFaces(assistantTail('x'))
+  installObserver(ctx, faces)
+
+  const listener = ctx.listeners[0]
+  await listener(
+    { id: 'session-child-not-run' },
+    { type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } },
+  )
+
+  assert.equal(runs.length, 0, '没跑过的票不该回传')
+  const saved = await loadBatch()
+  assert.equal(saved.tickets[0].status, 'suspended', '没跑过的票被改状态了')
+})
+
+test('票还没派出去（pending）时，也不结算也不回传', async () => {
+  await seedBatch('session-child-pending', 'pending')
+  const ctx = fakeCtx()
+  const { faces, runs } = fakeFaces(assistantTail('x'))
+  installObserver(ctx, faces)
+
+  const listener = ctx.listeners[0]
+  await listener(
+    { id: 'session-child-pending' },
+    { type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } },
+  )
+
+  assert.equal(runs.length, 0, '没派出去的票不该回传')
 })

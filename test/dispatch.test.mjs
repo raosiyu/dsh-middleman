@@ -135,3 +135,46 @@ test('回报文本带状态、文件、风险与原文', () => {
   assert.ok(text.includes('跑单测'))
   assert.ok(text.includes('做完了'))
 })
+
+test('派发返回的模型保留推理强度——宿主回包不带它', async () => {
+  // 真事故：spawn 钉模型时传了 reasoningEffort，但宿主回包的 selected
+  // 不带这个字段（fakeGateway 就是照宿主的样子造的）。
+  // dispatch_task 拿回包整个覆盖 ticket.model，用户设的强度就丢了，
+  // 卡片上「推理强度」那行跟着空掉。
+  //
+  // 判据：强度以**我们钉进去的那个**为准。
+  const { calls, gateway } = fakeGateway()
+  const dispatcher = createDispatcher({ gateway: () => gateway, peer: () => ({}) })
+
+  const spawned = await dispatcher.spawn({
+    id: 'T-1', title: '票', brief: '干活',
+    model: { provider: 'workbuddy', model: 'deepseek-v4.1-flash', reasoningEffort: 'high' },
+  })
+
+  assert.equal(spawned.model.reasoningEffort, 'high', '推理强度在派发后丢了')
+
+  // 钉模型时确实传了它。
+  const select = calls.find((c) => c.method === 'selectModel')
+  assert.equal(select.args.request.reasoningEffort, 'high')
+})
+
+test('宿主回包带的强度会被采纳（用户没写但宿主认了）', async () => {
+  // 宿主可能自己挑一个强度并回来说明——用户没写时，那个值就是真相。
+  const gateway = {
+    invoke: async ({ method }) => {
+      if (method === 'create') return { sessionId: 'session-x' }
+      if (method === 'selectModel') {
+        return { selected: { provider: 'p', model: 'm', reasoningEffort: 'medium' } }
+      }
+      return {}
+    },
+  }
+  const dispatcher = createDispatcher({ gateway: () => gateway, peer: () => ({}) })
+
+  const spawned = await dispatcher.spawn({
+    id: 'T-1', title: '票', brief: '干活',
+    model: { provider: 'p', model: 'm' },
+  })
+
+  assert.equal(spawned.model.reasoningEffort, 'medium')
+})
