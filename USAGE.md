@@ -63,7 +63,7 @@ curl -fsSL https://raw.githubusercontent.com/raosiyu/dsh-middleman/main/install.
 ```sh
 git clone https://github.com/raosiyu/dsh-middleman.git
 cd dsh-middleman
-npm test          # 173 个用例，应该全绿
+npm test          # 176 个用例，应该全绿
 ```
 
 然后用插件管理器把本地目录装上。
@@ -315,7 +315,7 @@ curl -s http://127.0.0.1:<端口>/dsh-middleman/api/state?batchId=D-20261103-xxx
 闸门写在代码里，不是提示词。每条都有单测盯着，改回去会立刻变红：
 
 ```sh
-npm test    # 173 个用例
+npm test    # 176 个用例
 ```
 
 ---

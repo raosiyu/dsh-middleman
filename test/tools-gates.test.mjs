@@ -348,3 +348,30 @@ test('risk 与 decisionId 同时给时拒绝，不静默丢掉决定', async () 
 test('清理临时目录', () => {
   rmSync(home, { recursive: true, force: true })
 })
+
+test('宿主不校验参数：九个工具收到任何畸形 args 都不许抛 TypeError', async () => {
+  // 插件用裸 tools.register() 注册，宿主**不按 JSON Schema 校验参数**。
+  // 模型传 null / undefined / 数字 / 字符串 / 数组都是可能的。
+  //
+  // 判据：要么正常返回，要么抛**可读的** MiddlemanError（带机器码）；
+  // 抛 TypeError（比如 "Cannot read properties of null"）就是崩了。
+  const { isMiddlemanError } = await import('../lib/refusals.js')
+  const tools = buildTools(fakeFaces().faces)
+  const badArgs = [null, undefined, 42, 'not-an-object', []]
+
+  for (const definition of tools) {
+    for (const bad of badArgs) {
+      try {
+        const result = await definition.execute(bad)
+        // 正常返回也算过——但必须是带 ok 字段的形状，不能是 undefined。
+        assert.equal(typeof result, 'object', definition.name + ' 返回了 ' + typeof result)
+      } catch (error) {
+        assert.ok(
+          isMiddlemanError(error),
+          definition.name + '(' + JSON.stringify(bad) + ') 抛了 ' + error.constructor.name
+            + '：' + error.message + '（应当是带机器码的可读拒绝）',
+        )
+      }
+    }
+  }
+})
