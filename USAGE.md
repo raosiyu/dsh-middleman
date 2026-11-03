@@ -63,7 +63,7 @@ curl -fsSL https://raw.githubusercontent.com/raosiyu/dsh-middleman/main/install.
 ```sh
 git clone https://github.com/raosiyu/dsh-middleman.git
 cd dsh-middleman
-npm test          # 141 个用例，应该全绿
+npm test          # 173 个用例，应该全绿
 ```
 
 然后用插件管理器把本地目录装上。
@@ -257,6 +257,11 @@ T-1 卡片可见性验证票  [suspended]
 | 拒绝时你会看到 | 怎么解 |
 |---|---|
 | 「dispatch_task 必须带 batchId」 | 先开批次——没有批次就没有派发 |
+| 「question 与 answer 都得给」 | 盘问的账本记的是「问过什么、用户答了什么」——没给的不算数 |
+| 「steps 与 output 都得给」 | 没写的规划等于没规划，子会话会自己猜「怎么做」 |
+| 「risk 与 decisionId 只能给一个」 | 一次只办一件事，两个都给会让其中一个被静默丢掉 |
+| 「这些票已经派出去了，不能重新拆」 | 已跑的票改不了；要改就改还没派的那几张 |
+| 「还有 N 个决定没定」 | 设计树没走完。成环也算——互相阻塞的决定永远定不下来 |
 | 「盘问没做够：至少要有 3 个已回答的问题」 | 多答几个，别让它替你决定 |
 | 「风险的四栏还不齐」 | 补齐触发 / 影响 / 缓解 / 怎么验证 |
 | 「的验证方式承诺了单测，却没说是哪条测试」 | 指名一条真的存在的测试文件（如 `risk-r1.test.mjs`） |
@@ -310,7 +315,7 @@ curl -s http://127.0.0.1:<端口>/dsh-middleman/api/state?batchId=D-20261103-xxx
 闸门写在代码里，不是提示词。每条都有单测盯着，改回去会立刻变红：
 
 ```sh
-npm test    # 141 个用例
+npm test    # 173 个用例
 ```
 
 ---
