@@ -58,15 +58,18 @@ dispatch_task    建会话 + 定模型 + 挂起（不发第一条消息）
 （子会话开跑）→ turn/end → 结果自动推回主会话
 ```
 
-## 三条风险，已绑在代码上
+## 四条风险，已绑在代码上
 
 | ID | 触发 | 缓解 | 验证 |
 |---|---|---|---|
-| R-1 | 主会话把 `dispatch_task` 当普通 subagent 用，跳过盘问 | 没有 `batchId` 一律拒绝 | `dispatch.test.mjs` 断言抛错 |
+| R-1 | 主会话把 `dispatch_task` 当普通 subagent 用，跳过盘问 | 没有 `batchId` 一律拒绝 | `risk-r1.test.mjs` 断言抛错**且**一个子会话都没建 |
 | R-2 | 子会话撞 `max-tokens` 或被中断，却被当成失败 | 按 reason 分类，记 `partial` 并标截断位置 | `core.test.mjs` 断言 status |
 | R-3 | 派发前根本没问清楚 | 至少 3 个已回答问题 + 流程规划 + 一条风险，缺一不可 | `core.test.mjs` 断言 designGateProblems |
+| R-4 | 风险的「验证方式」写的是空话——承诺的单测根本不存在 | 验证方式里写了「单测」就必须指名那条测试文件，登记与派发时各查一次 | `verification-gate.test.mjs` 断言拦住没兑现的承诺 |
 
 R-2 的理由：长任务被截断很常见。一律标失败，你会开始忽略失败通知。
+
+R-4 的理由：风险登记由模型自己写，「验证方式」也是模型自己写——没人核，就只是一句话。于是承诺了 `单测：xxx.test.mjs`，仓库里却根本没有 `xxx.test.mjs`。这条闸门在**登记**和**派发**两处各查一次：登记时拦住空话，派发时再拦一次（防止绕过登记直接派）。写不成单测的验证方式可以写「人工核对：…」，那是允许的。
 
 ## 安装
 
@@ -111,7 +114,7 @@ https://github.com/raosiyu/dsh-middleman
 ```sh
 git clone https://github.com/raosiyu/dsh-middleman.git
 cd dsh-middleman
-npm test          # 49 个用例，应该全绿
+npm test          # 108 个用例，应该全绿
 ```
 
 然后用上面「应用内安装」把本地目录装上。
@@ -173,7 +176,22 @@ node bin/mm.mjs
 node --test test/*.test.mjs
 ```
 
-49 个用例：前沿计算、四道闸门、环检测、风险四栏、设计闸门、`turn/end` 分类、派发顺序、默认模型恢复、路由与工具注册。
+108 个用例：前沿计算、四道闸门、环检测、风险四栏、设计闸门、`turn/end` 分类、派发顺序、默认模型恢复、路由与工具注册、浏览器 bundle 的运行期守卫、推理强度的单一真相来源。
+
+### 派发卡片的可视验证台
+
+对话流里的卡片被两件事夹住：**对话流虚拟化**（内容只在视口附近进 DOM）与**我自己这一轮还在往同一条流里追加内容**（宿主不断把视口拉回底部）。所以直接对真对话流截图永远截不到——卡片在 DOM 里，但不在视口里。
+
+`scripts/visual-harness.mjs` 换一条路：把**仓库里那一份** `lib/client.js` 原封不动装进页面，喂**真实账本里的工单**，用真 React 真 DOM 渲染。渲染的是同一份代码、同一份数据，只是不受虚拟化影响——截图因此是确定的。
+
+```sh
+mkdir -p /tmp/mm-harness && cd /tmp/mm-harness && npm init -y && npm i react react-dom esbuild
+node scripts/visual-harness.mjs <batchId> <ticketId> <outDir>
+```
+
+它会起一个本地服务器（页面的 `/dsh-middleman/api/*` 代理到真插件），用 CDP 打开页面、等卡片渲染完，输出 `dispatch-card.png` 与 `dispatch-card.txt`。
+
+**这个台子抓到过一个真 bug**：卡片上写「推理强度 low」，子会话其实跑的是 high——工单里 `model.reasoningEffort`（派发时真正传下去的那个）与 `effort`（冗余字段）各写各的，判断层优先读了后者。
 
 ## 许可
 
