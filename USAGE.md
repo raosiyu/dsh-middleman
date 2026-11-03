@@ -63,7 +63,7 @@ curl -fsSL https://raw.githubusercontent.com/raosiyu/dsh-whale-tail/main/install
 ```sh
 git clone https://github.com/raosiyu/dsh-whale-tail.git
 cd dsh-whale-tail
-npm test          # 188 个用例 + 4 条文档对账，应该全绿
+npm test          # 189 个用例 + 4 条文档对账，应该全绿
 ```
 
 然后用插件管理器把本地目录装上。
@@ -338,7 +338,7 @@ curl -s http://127.0.0.1:<端口>/whale-tail/api/state?batchId=D-20261103-xxxx |
 闸门写在代码里，不是提示词。每条都有单测盯着，改回去会立刻变红：
 
 ```sh
-npm test    # 188 个用例 + 4 条文档对账
+npm test    # 189 个用例 + 4 条文档对账
 ```
 
 ---

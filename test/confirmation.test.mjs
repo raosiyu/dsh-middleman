@@ -305,3 +305,48 @@ test('回答路由的顺序：先送出去，再改状态（写在代码结构�
     '先改了状态才送答案——送失败时台账会谎报「在跑」。要把 dispatcher.run 放到赋值之前',
   )
 })
+
+test('观察器不许把「在等人」的票结算成 done（跑真事件，不看源码）', async () => {
+  // 真机撞到的：request_confirmation 把票置成 waiting 并写入 waiting 字段，
+  // 紧接着那一轮结束，观察器把票结算成 done——「在等你」被覆盖成「已完成」。
+  // 面板上看起来活干完了，人不会去答，子会话就永远停在那儿。
+  //
+  // 这条必须**跑真的 turn/end** 才算验过。只看源码里有没有某个字符串，
+  // 挡不住「写了但顺序不对」这种改法。
+  const { installObserver } = await import('../lib/observer.js')
+
+  const batch = blankBatch('观察器测试')
+  batch.id = 'OBS-waiting'
+  batch.tickets = [{
+    id: 'T-1', title: '会停的票', brief: 'b', blockedBy: [], riskIds: [], riskFree: true,
+    riskFreeReason: '测试', model: { provider: 'p', model: 'm' }, modelReason: 'r',
+    status: 'waiting', childSessionId: 'session-obs-waiting',
+    waiting: {
+      question: '要 A 还是 B？', options: ['A', 'B'],
+      askedAt: Date.now(), sessionId: 'session-obs-waiting',
+    },
+  }]
+  await save(batch)
+
+  let handler
+  const ctx = { on: (_name, fn) => { handler = fn; return () => {} } }
+  installObserver(ctx, {
+    dispatcher: { tail: async () => [], run: async () => {} },
+    warn() {},
+    testFiles: async () => [],
+  })
+  assert.equal(typeof handler, 'function', '观察器没订阅 session/event')
+
+  // 那一轮结束——正是真机上覆盖掉 waiting 的那一刻。
+  await handler({ id: 'session-obs-waiting' }, {
+    type: 'turn/end',
+    data: { turn: 1, reason: { kind: 'completed' } },
+  })
+  await new Promise((resolve) => { setTimeout(resolve, 200) })
+
+  const after = await load('OBS-waiting')
+  assert.equal(after.tickets[0].status, 'waiting',
+    '观察器把「在等人」结算成了 ' + after.tickets[0].status + '——人不会去答那个问题了')
+  assert.notEqual(after.tickets[0].waiting, undefined,
+    'waiting 字段被观察器清掉了，面板上看不出它在等什么')
+})
