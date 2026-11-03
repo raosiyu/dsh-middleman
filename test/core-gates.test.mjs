@@ -14,7 +14,7 @@ import assert from 'node:assert/strict'
 import {
   convergeProblems, designGateProblems, dispatchProblems, dependencyProblems,
   openCount, riskProblems, riskGaps, verificationTestGap, nextRound,
-  approveProblems, isClosed,
+  approveProblems, isClosed, answeredQuestionCount,
 } from '../lib/core.js'
 
 /** 一条四栏齐全的风险。 */
@@ -277,4 +277,48 @@ test('同一条问三遍不算数', () => {
     ],
   })
   assert.ok(designGateProblems(batch).some((p) => p.includes('盘问没做够')))
+})
+
+test('一个测试文件都没扫到时，说的是「这个目录没有测试」而不是「没有这条测试」', () => {
+  // 真机上撞到的：批次 cwd 是个没有 test 目录的项目，而验证方式里写的
+  // 测试名其实存在于**插件仓库**。报「仓库里没有这条测试」会让人去翻
+  // 仓库找那个文件，找不到还以为名字写错了。
+  //
+  // 两种情况必须分开说：
+  //   - 这个目录根本没有测试  → 说清楚扫的是哪个目录
+  //   - 这个目录有测试但没这条 → 说清楚现有的有哪些
+  const empty = verificationTestGap(
+    { id: 'R-1', verification: '单测：core-gates.test.mjs 断言成环被拦' },
+    [],
+  )
+  assert.match(empty, /一个测试文件都没扫到/, '空目录被说成「没有这条测试」')
+  assert.match(empty, /cwd/, '没说清扫的是哪个目录')
+
+  const partial = verificationTestGap(
+    { id: 'R-1', verification: '单测：ghost.test.mjs 断言' },
+    ['core.test.mjs', 'risk-r1.test.mjs'],
+  )
+  assert.match(partial, /没有这条测试/)
+  assert.match(partial, /core\.test\.mjs/, '没把现有的测试列出来，人不知道有什么可用')
+})
+
+test('工具回报的进度与闸门的判断用同一个口径', () => {
+  // 真机上撞到的：design_question 回报 answered: 3（够了），而
+  // designGateProblems 说「现在只有 2 个」。人以为闸门坏了。
+  //
+  // 根因是两处各写了一遍计数。现在抽成 answeredQuestionCount 一个函数，
+  // 这里钉住：它不是「有答案的条数」，而是「问了用户并答了的**不同**问题数」。
+  const questions = [
+    { kind: 'goal', question: '目标', answer: 'a' },
+    { kind: 'scope', question: '范围', answer: 'b' },
+    { kind: 'fact', question: '我自己查的事实', answer: 'c' },   // 不算
+    { kind: 'goal', question: '目标', answer: 'a' },              // 重复，不算
+    { kind: 'design', question: '空答案', answer: '   ' },        // 空，不算
+    { kind: 'design', question: '没答案' },                        // 没答，不算
+  ]
+  assert.equal(answeredQuestionCount(questions), 2)
+
+  // 闸门说的数必须与它一致。
+  const gap = designGateProblems({ questions, plan: { steps: 's', output: 'o' }, risks: [GOOD_RISK] })
+  assert.ok(gap.some((p) => p.includes('现在只有 2 个')), '闸门的数与 answeredQuestionCount 不一致')
 })
