@@ -268,3 +268,117 @@ test('渲染中台页与批次卡片不会抛 ReferenceError', () => {
   const page = registrations.get('main').component
   assert.doesNotThrow(() => render(page({}), React))
 })
+
+test('卡片上渲染出换模型的下拉，并列出目录里的模型', () => {
+  // 「用户可以调整模型」那条需求的 UI 落点。
+  //
+  // 目录从 /models 拿：卡片自己会去读，所以 fetch 桩要认这条路径。
+  const fetchStub = async (url) => {
+    if (String(url).includes('/models')) {
+      return {
+        json: async () => ({
+          ok: true,
+          catalog: {
+            groups: [
+              { id: 'workbuddy', name: 'WorkBuddy', models: [{ id: 'deepseek-v4.1-flash', name: 'DeepSeek-V4.1-Flash' }] },
+              { id: 'deepseek-account', name: 'DS', models: [{ id: 'deepseek-flash', name: 'Flash' }] },
+            ],
+          },
+        }),
+      }
+    }
+    return {
+      json: async () => ({
+        ok: true,
+        batch: { id: 'D-1', title: '演示批次', status: 'approved', tickets: [SAMPLE_TICKET] },
+      }),
+    }
+  }
+
+  const { registrations, React } = loadBundle(fetchStub)
+  const component = registrations.get('tool.call.toolview').component
+
+  // DispatchCard 的 hook 顺序：1=state（工单），2=目录。
+  React.__seed(1, { loading: false, ticket: SAMPLE_TICKET })
+  React.__seed(2, {
+    groups: [
+      { id: 'workbuddy', name: 'WorkBuddy', models: [{ id: 'deepseek-v4.1-flash', name: 'DeepSeek-V4.1-Flash' }] },
+      { id: 'deepseek-account', name: 'DS', models: [{ id: 'deepseek-flash', name: 'Flash' }] },
+    ],
+  })
+
+  const tree = component({
+    phase: 'result',
+    block: { call: { argsRaw: JSON.stringify({ batchId: 'D-1', ticketId: 'T-1' }) } },
+  })
+
+  const texts = []
+  let selects = 0
+  const collect = (node) => {
+    if (node === null || node === undefined) return
+    if (typeof node === 'string') { texts.push(node); return }
+    if (Array.isArray(node)) { node.forEach(collect); return }
+    if (typeof node !== 'object') return
+    if (node.type === 'select') selects += 1
+    if (typeof node.type === 'function') {
+      React.__resetHooks()
+      collect(node.type(node.props))
+      return
+    }
+    collect(node.children)
+  }
+  collect(tree)
+
+  assert.equal(selects, 1, '卡片上没有换模型的下拉')
+  const hasText = (fragment) => texts.some((text) => text.includes(fragment))
+  assert.ok(hasText('换个模型'), '下拉没有提示文案')
+  assert.ok(hasText('workbuddy · DeepSeek-V4.1-Flash'), '下拉里没有目录中的模型')
+  assert.ok(hasText('deepseek-account · Flash'), '下拉里没有第二个 provider 的模型')
+
+  React.__clearSeed()
+})
+
+test('拿不到模型目录时卡片照常渲染，只是不给下拉', () => {
+  // 目录是可选的：拿不到不该让整张卡挂掉。
+  const fetchStub = async (url) => {
+    if (String(url).includes('/models')) {
+      return { json: async () => ({ ok: false, error: 'catalog-unavailable' }) }
+    }
+    return {
+      json: async () => ({
+        ok: true,
+        batch: { id: 'D-1', title: '演示批次', status: 'approved', tickets: [SAMPLE_TICKET] },
+      }),
+    }
+  }
+
+  const { registrations, React } = loadBundle(fetchStub)
+  const component = registrations.get('tool.call.toolview').component
+
+  React.__seed(1, { loading: false, ticket: SAMPLE_TICKET })
+  React.__seed(2, null)
+
+  const tree = component({
+    phase: 'result',
+    block: { call: { argsRaw: JSON.stringify({ batchId: 'D-1', ticketId: 'T-1' }) } },
+  })
+
+  let selects = 0
+  const collect = (node) => {
+    if (node === null || node === undefined) return
+    if (Array.isArray(node)) { node.forEach(collect); return }
+    if (typeof node !== 'object') return
+    if (node.type === 'select') selects += 1
+    if (typeof node.type === 'function') {
+      React.__resetHooks()
+      collect(node.type(node.props))
+      return
+    }
+    collect(node.children)
+  }
+  collect(tree)
+
+  assert.equal(selects, 0, '没有目录却给了个空下拉')
+
+  React.__clearSeed()
+})

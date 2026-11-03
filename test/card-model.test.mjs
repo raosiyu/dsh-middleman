@@ -6,7 +6,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { argsRawOf, argsOf, ticketView, TONE } from '../lib/card-model.js'
+import { argsRawOf, argsOf, ticketView, modelOptions, TONE } from '../lib/card-model.js'
 
 test('preparing 阶段没有参数可读', () => {
   assert.equal(argsRawOf('preparing', { name: 'dispatch_task' }), undefined)
@@ -147,4 +147,46 @@ test('两个都没有时这一行不出现，不填占位话', () => {
     model: { provider: 'workbuddy', model: 'deepseek-v4.1-flash' },
   })
   assert.equal(view.fields.find(([label]) => label === '推理强度'), undefined)
+})
+
+test('模型目录摊平成可选项，每项带着 provider 与 model', () => {
+  const options = modelOptions({
+    groups: [
+      { id: 'workbuddy', name: 'WorkBuddy', models: [{ id: 'deepseek-v4.1-flash', name: 'DeepSeek-V4.1-Flash' }] },
+      { id: 'deepseek-account', name: 'DS', models: [{ id: 'deepseek-flash', name: 'Flash' }] },
+    ],
+  })
+
+  assert.equal(options.length, 2)
+  assert.deepEqual(options[0], {
+    value: 'workbuddy/deepseek-v4.1-flash',
+    provider: 'workbuddy',
+    model: 'deepseek-v4.1-flash',
+    label: 'workbuddy · DeepSeek-V4.1-Flash',
+  })
+  assert.equal(options[1].value, 'deepseek-account/deepseek-flash')
+})
+
+test('目录拿不到时摊成空数组，不抛错', () => {
+  assert.deepEqual(modelOptions(undefined), [])
+  assert.deepEqual(modelOptions(null), [])
+  assert.deepEqual(modelOptions({}), [])
+  assert.deepEqual(modelOptions({ groups: 'not-an-array' }), [])
+})
+
+test('目录里有缺字段的项就跳过那项，不让整张表废掉', () => {
+  const options = modelOptions({
+    groups: [
+      { id: 'ok', models: [{ id: 'm1' }] },
+      { models: [{ id: 'm2' }] },          // 没有 provider
+      { id: 'also-ok', models: [null, { name: 'no-id' }] },
+      null,
+    ],
+  })
+  assert.deepEqual(options.map((o) => o.value), ['ok/m1'])
+})
+
+test('模型没有 name 时用 id 当标签', () => {
+  const options = modelOptions({ groups: [{ id: 'p', models: [{ id: 'm' }] }] })
+  assert.equal(options[0].label, 'p · m')
 })
