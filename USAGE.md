@@ -63,7 +63,7 @@ curl -fsSL https://raw.githubusercontent.com/raosiyu/dsh-middleman/main/install.
 ```sh
 git clone https://github.com/raosiyu/dsh-middleman.git
 cd dsh-middleman
-npm test          # 176 个用例，应该全绿
+npm test          # 176 个功能用例 + 2 个文档对账用例，应该全绿
 ```
 
 然后用插件管理器把本地目录装上。

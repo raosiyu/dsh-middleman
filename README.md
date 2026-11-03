@@ -173,7 +173,7 @@ https://github.com/raosiyu/dsh-middleman
 ```sh
 git clone https://github.com/raosiyu/dsh-middleman.git
 cd dsh-middleman
-npm test          # 176 个用例，应该全绿
+npm test          # 176 个功能用例 + 2 个文档对账用例，应该全绿
 ```
 
 然后用上面「应用内安装」把本地目录装上。
