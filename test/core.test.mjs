@@ -183,6 +183,16 @@ test('error / aborted / blocked 记 failed', () => {
   }
 })
 
+test('error 要把错误码带进 note，否则欠费和真 bug 分不开', () => {
+  const verdict = classifyTurnEnd({
+    kind: 'error',
+    error: { code: 'ACCOUNT_QUOTA', message: 'Insufficient Balance', status: 402 },
+  })
+  assert.equal(verdict.status, 'failed')
+  assert.ok(verdict.note.includes('ACCOUNT_QUOTA'), verdict.note)
+  assert.ok(verdict.note.includes('Insufficient Balance'), verdict.note)
+})
+
 test('未闭合决定计数', () => {
   const batch = { decisions: [{ id: 'D1', answer: 'a' }, { id: 'D2' }, { id: 'D3', deferred: 'later' }] }
   assert.equal(openCount(batch), 1)

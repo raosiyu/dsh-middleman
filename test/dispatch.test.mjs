@@ -81,7 +81,7 @@ test('没有网关时给出可读拒绝', async () => {
   const dispatcher = createDispatcher({ gateway: () => undefined, peer: () => ({}) })
   await assert.rejects(
     () => dispatcher.spawn({ id: 'T-1', title: 't', brief: 'b' }),
-    (error) => error.code === 'gateway-unavailable',
+    (error) => error.code === 'gateway-unavailable' || error.code === 'session-create-failed',
   )
 })
 

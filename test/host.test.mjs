@@ -83,15 +83,23 @@ test('工具面里没有 approve —— 模型不能批准自己的设计', () =
   assert.equal(names.some((name) => name.includes('approve')), false)
 })
 
-test('apply 注册了六个路由，且都在本插件前缀下', () => {
+test('apply 注册了七个路由，且都在本插件前缀下', () => {
   const { ctx, registered } = fakeCtx()
   apply(ctx, { enabled: true })
   // effect 已经在 apply 里执行过了，这里不再重复调用，否则会重复注册。
-  assert.equal(registered.routes.length, 6)
+  assert.equal(registered.routes.length, 7)
   for (const route of registered.routes) {
     assert.ok(route.path.startsWith('/dsh-middleman/api'), route.path)
     assert.equal(typeof route.handler, 'function')
   }
+})
+
+test('修改意见那条路由存在：卡片上的按钮要能写回主会话', () => {
+  const { ctx, registered } = fakeCtx()
+  apply(ctx, { enabled: true })
+  const feedback = registered.routes.find((route) => route.path === '/dsh-middleman/api/feedback')
+  assert.ok(feedback !== undefined, '必须有 /feedback：卡片上的「有修改意见」按钮打它')
+  assert.equal(feedback.kind, 'exact')
 })
 
 test('执行按钮那条路由存在，且是精确匹配', () => {
