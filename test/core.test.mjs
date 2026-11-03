@@ -100,10 +100,24 @@ test('收敛要求至少一条验收标准', () => {
   assert.ok(convergeProblems(batch).some((p) => p.includes('验收标准')))
 })
 
-test('收敛要求前沿清空', () => {
+test('收敛要求整棵设计树都走完', () => {
+  // 原来只查「前沿清空」——决定依赖成环时前沿永远是空的（环里的决定
+  // 互相阻塞），于是「前沿清空」把一棵永远走不完的树当成走完了。
+  // 现在数的是整棵树上还没闭合的决定。
   const batch = goodBatch()
   batch.decisions.push({ id: 'D9', dependsOn: [], title: 'x', body: 'y' })
-  assert.ok(convergeProblems(batch).some((p) => p.includes('前沿上还有')))
+  assert.ok(convergeProblems(batch).some((p) => p.includes('个决定没定')))
+})
+
+test('决定依赖成环时，收敛闸门拦住', () => {
+  // 环里的决定互相阻塞，前沿永远是空的——只查前沿就会放行。
+  const batch = goodBatch()
+  batch.decisions = [
+    { id: 'D1', kind: 'goal', title: 'a', body: 'b', dependsOn: ['D2'] },
+    { id: 'D2', kind: 'design', title: 'a', body: 'b', dependsOn: ['D1'] },
+  ]
+  assert.ok(convergeProblems(batch).some((p) => p.includes('决定没定')))
+  assert.ok(dependencyProblems(batch).some((p) => p.includes('成环')))
 })
 
 test('模型进程不能批准自己的设计', () => {
